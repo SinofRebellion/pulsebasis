@@ -126,6 +126,11 @@ export function analyze(raw: Raw, L: Tx[], E: ReplayOut, PR: Prices) {
     return { coin: c, label: c === 'HEX' ? 'HEX (liquid)' : c, replay: rep, chain: ch, diff, usd, ok: usd < 2 || Math.abs(diff) <= Math.max(1e-6, Math.abs(ch) * 0.001) };
   });
   const stakeRep = E.staked[0]; recon.push({ coin: 'HEX', label: 'HEX (staked principal)', replay: stakeRep, chain: princ, diff: stakeRep - princ, usd: Math.abs(stakeRep - princ) * now.HEX, ok: Math.abs(stakeRep - princ) * now.HEX < 2 || Math.abs(stakeRep - princ) <= princ * 0.001 });
+  // bridged eHEX on PulseChain (its own token, not pHEX): shown separately, kept out of the PulseChain RH totals
+  const ehexNow = PR.exactAt('EHEX', raw.latestBlock) ?? PR.daily('EHEX', raw.latestTs) ?? 0;
+  const ehexChain = chainBal('EHEX'); const [eq, ec] = Pl('EHEX');
+  const ehex = { qty: eq, cost: ec, avg: eq > 0 ? ec / eq : 0, now: ehexNow, value: eq * ehexNow, pl: eq * ehexNow - ec, plpct: ec ? (eq * ehexNow - ec) / ec * 100 : null, rise: ehexNow && eq ? ((ec / eq) / ehexNow - 1) * 100 : null };
+  recon.push({ coin: 'EHEX', label: 'eHEX (bridged, PulseChain)', replay: eq, chain: ehexChain, diff: eq - ehexChain, usd: Math.abs(eq - ehexChain) * ehexNow, ok: Math.abs(eq - ehexChain) * ehexNow < 2 || Math.abs(eq - ehexChain) <= Math.max(1e-6, ehexChain * 0.001) });
   const gaps: { level: 'info' | 'warn'; text: string }[] = [];
   for (const [k, v] of Object.entries(E.warn)) {
     if (k.startsWith('short_')) { const a = k.slice(6); if ((COINS as readonly string[]).includes(a)) gaps.push({ level: v * (now[a] || 0) > 5 ? 'warn' : 'info', text: `${fmt(v)} ${a} (≈$${(v * (now[a] || 0)).toFixed(2)} today) was spent beyond what we could trace coming in, so it's counted at $0 cost. Usually dust or rounding.` }); }
@@ -169,7 +174,7 @@ export function analyze(raw: Raw, L: Tx[], E: ReplayOut, PR: Prices) {
   return { asOf: raw.latestTs, block: raw.latestBlock, now, nowSrc, percoin, tot, hex, avgOffsetPct, paidInterest, stakes, stakeHist, effective, best, worst,
     moneyIn: { total: IN, n: E.moneyin.length, ramps }, moneyOutTotal: OUT, fees, feesTotal, venues: E.venues, cumulative, buysByMonth, buys, series,
     accuracy: { nAcq, exactN, pctExact: nAcq ? exactN / nAcq * 100 : 100, usdPctExact: usdAcq ? usdExact / usdAcq * 100 : 100, sources: ps, recon, allOk: recon.every(r => r.ok), gaps, txs: L.length },
-    poison, incomeBy, lots, wallets: walletsSummary, freeheld: E.freeheld, forkCopy: E.forkCopy };
+    poison, incomeBy, lots, wallets: walletsSummary, freeheld: E.freeheld, forkCopy: E.forkCopy, ehex, eth: null as null | import('./eth').EthReport };
 }
 export type Report = ReturnType<typeof analyze>;
 function fmt(n: number) { return n >= 1000 ? Math.round(n).toLocaleString('en-US') : n.toFixed(2); }

@@ -290,9 +290,9 @@
       "accuracy": "high",
       "verified": true,
       "sources": [
-        "PulseChain explorer: HomeOmnibridge 0x129cB265\u2026eC3f, WPLSOmnibridgeRouter 0xf868\u20268499 (verified contract names)",
+        "PulseChain explorer: HomeOmnibridge 0x129cB265…eC3f, WPLSOmnibridgeRouter 0xf868…8499 (verified contract names)",
         "Bridged token list: howtopulse.com/bridged-contract-addresses, 9inch gitbook",
-        "0x4fD0aaa7\u2026 is an EternalStorageProxy created by the same deployer as WPLSOmnibridgeRouter (role inferred: AMB/bridge proxy)"
+        "0x4fD0aaa7… is an EternalStorageProxy created by the same deployer as WPLSOmnibridgeRouter (role inferred: AMB/bridge proxy)"
       ]
     },
     {
@@ -312,7 +312,7 @@
       "accuracy": "high",
       "verified": true,
       "sources": [
-        "PulseChain explorer: HypERC20 (USDC) 0x2933A799\u20262d42",
+        "PulseChain explorer: HypERC20 (USDC) 0x2933A799…2d42",
         "hyperlane-xyz/hyperlane-monorepo commit a572881 'usdc pulsechain warp route'"
       ]
     },
@@ -349,7 +349,7 @@
       },
       "accuracy": "high",
       "verified": true,
-      "verifiedNote": "0xe7EE\u2026, 0x80C2\u2026, 0x8dC4\u2026, 0xC1fB\u2026, 0x0E0e\u2026, 0x63F3\u2026 listed in LibertySwap docs; 0x78f63f\u2026 observed delivering in real user history (same pattern, not in docs)",
+      "verifiedNote": "0xe7EE…, 0x80C2…, 0x8dC4…, 0xC1fB…, 0x0E0e…, 0x63F3… listed in LibertySwap docs; 0x78f63f… observed delivering in real user history (same pattern, not in docs)",
       "sources": [
         "docs.libertyswap.finance/liberty-swap-2.0/cross-chain-swaps (fees + contract addresses)",
         "docs.libertyswap.finance/resources/liberty-swap-api"
@@ -420,7 +420,7 @@
       },
       "accuracy": "medium",
       "verified": "observed",
-      "verifiedNote": "High-volume EOA payout wallets (17k\u2013372k txs) observed paying out PLS in real SwapToPulse/ChangeNOW-era purchases. Not publicly labeled by the services.",
+      "verifiedNote": "High-volume EOA payout wallets (17k–372k txs) observed paying out PLS in real SwapToPulse/ChangeNOW-era purchases. Not publicly labeled by the services.",
       "sources": [
         "swaptopulse.com (custodial deposit-address model)",
         "changenow.io/buy/pulse"
@@ -441,7 +441,7 @@
       },
       "accuracy": "medium",
       "verified": "heuristic",
-      "verifiedNote": "Covers CEX withdrawals (MEXC, Gate, Poloniex, BingX, CoinEx, LBank, Bitget\u2026), RampNow / Guardarian / SimpleSwap / PulseChain Ramp-type card ramps and other custodial services: any non-contract sender with 10,000+ transactions. CEX hot wallets on PulseChain are not publicly labeled, so no individual exchange addresses are hard-coded.",
+      "verifiedNote": "Covers CEX withdrawals (MEXC, Gate, Poloniex, BingX, CoinEx, LBank, Bitget…), RampNow / Guardarian / SimpleSwap / PulseChain Ramp-type card ramps and other custodial services: any non-contract sender with 10,000+ transactions. CEX hot wallets on PulseChain are not publicly labeled, so no individual exchange addresses are hard-coded.",
       "sources": [
         "PulseChain explorer address counters"
       ]
@@ -458,12 +458,12 @@
       },
       "valuation": "zero",
       "fee": {
-        "text": "\u2014"
+        "text": "—"
       },
       "accuracy": "exact",
       "verified": true,
       "sources": [
-        "PulseChain explorer: MasterChef 0xB2Ca4A66\u202602d4"
+        "PulseChain explorer: MasterChef 0xB2Ca4A66…02d4"
       ]
     },
     {
@@ -474,7 +474,7 @@
       "match": {},
       "valuation": "arrival_market_outside",
       "fee": {
-        "text": "\u2014"
+        "text": "—"
       },
       "accuracy": "medium",
       "verified": true,
@@ -547,7 +547,7 @@
       "fee": "LP fee inside the price",
       "verified": true,
       "sources": [
-        "PulseChain explorer: NineInchRouter 0xeB45a3c4\u2026d725"
+        "PulseChain explorer: NineInchRouter 0xeB45a3c4…d725"
       ]
     },
     {
@@ -559,7 +559,7 @@
       "fee": "Up to 1% (contract FEE_LIMIT)",
       "verified": true,
       "sources": [
-        "PulseChain explorer: Router 0xB2BE281e\u20262A54 (Zerion source)"
+        "PulseChain explorer: Router 0xB2BE281e…2A54 (Zerion source)"
       ]
     },
     {
@@ -576,8 +576,8 @@
   },
   "rpc": {
     "archive": [
-      "https://rpc-pulsechain.g4mm4.io",
-      "https://rpc.pulsechain.com"
+      "https://rpc.pulsechain.com",
+      "https://rpc-pulsechain.g4mm4.io"
     ],
     "logs": [
       "https://rpc.pulsechain.com"
@@ -591,7 +591,10 @@
     "subgraphs": {
       "v1": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex",
       "v2": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2"
-    }
+    },
+    "lastResort": [
+      "https://rpc-pulsechain.g4mm4.io"
+    ]
   },
   "ethereum": {
     "hex": "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
@@ -600,7 +603,7 @@
     "rpc": [
       "https://ethereum-rpc.publicnode.com",
       "https://eth.drpc.org",
-      "https://1rpc.io/eth"
+      "https://eth-mainnet.public.blastapi.io"
     ],
     "scan": "https://eth.blockscout.com/api",
     "scanV2": "https://eth.blockscout.com/api/v2",
@@ -625,6 +628,10 @@
       "stakeEnd": "0x72d9c5a7ab13846e08d9c838f9e866a1bb4a66a2fd3ba3c9e7da3cf9e394dfd7",
       "lobbyEnter": "0x25ecdb937d5c5cc78f0d18dfb1ac82c44086b5dc608380ba357d06c9868f0b1d",
       "lobbyExit": "0xa6b19fa7f41317a186e1d58e9d81f86a52f1102b6bce10b4eca83f37aaa58468"
-    }
+    },
+    "rpcHistory": [
+      "https://eth.drpc.org",
+      "https://eth-mainnet.public.blastapi.io"
+    ]
   }
 }

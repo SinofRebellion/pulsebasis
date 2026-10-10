@@ -3,9 +3,15 @@ import { collect, senderInfo, verifyStatuses, type Progress, type Raw } from './
 import { buildLedger, Prices, replay } from './replay';
 import { analyze } from './analyze';
 import { stats } from './net';
+import { collectEth, analyzeEth, type EthReport } from './eth';
 
 export async function runAll(addrs: string[], kv: KV, progress: Progress, rawOverride?: Raw) {
   const t0 = Date.now();
+  // Ethereum HEX runs alongside PulseChain and can never break the PulseChain report.
+  const ethP: Promise<EthReport> = rawOverride ? Promise.resolve({ status: 'skipped', message: '' }) : Promise.race([
+    collectEth(addrs, kv, () => {}).then(analyzeEth),
+    new Promise<EthReport>(res => setTimeout(() => res({ status: 'error', message: 'Ethereum took too long to answer.' }), 240000)),
+  ]).catch(() => ({ status: 'error' as const, message: "Couldn't read Ethereum right now." }));
   let raw = rawOverride ?? await collect(addrs, kv, progress);
   progress({ phase: 'Crunching', detail: 'Replaying every transaction…', pct: 96 });
   const L = buildLedger(raw); const PR = new Prices(raw);
@@ -32,6 +38,9 @@ export async function runAll(addrs: string[], kv: KV, progress: Progress, rawOve
     const L2 = buildLedger(raw); const PR2 = new Prices(raw);
     E = replay(raw, L2, PR2, raw.senders); rep = analyze(raw, L2, E, PR2);
   }
+  progress({ phase: 'Finishing', detail: 'Reading HEX on Ethereum…', pct: 99 });
+  rep.eth = await ethP;
+  if (rep.eth.status === 'ok') { rep.accuracy.recon.push(...rep.eth.recon); rep.accuracy.allOk = rep.accuracy.recon.every(r => r.ok); }
   progress({ phase: 'Done', detail: '', pct: 100 });
   return { report: rep, ms: Date.now() - t0, timings: raw.timings, requests: stats.requests, replay: E };
 }
