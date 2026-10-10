@@ -35,15 +35,28 @@ function pick(eps: string[], i: number): string {
   return o[i % o.length];
 }
 export function resetHealth() { health.clear(); }
+
+/* "Busy" = the server is overloaded or rate-limiting us (HTTP 429/502/503/504, JSON-RPC -32005/-32016/-32090,
+ * "too busy", "rate limit", "capacity", network drops). Busy errors are retried with exponential backoff and
+ * rotated across every endpoint; if they never clear, callers get a BusyError whose text is safe to show. */
+const BUSY_RE = /(HTTP (429|502|503|504)|busy|rate.?limit|too many requests|capacity|overload|try again|temporarily|unavailable|exceeded|-32005|-32016|-32090|failed to fetch|networkerror|network error|load failed|aborted|abort|timed? ?out|ECONNRESET|socket hang up)/i;
+const BUSY_CODES = new Set([-32005, -32016, -32090, 429]);
+export const BUSY_TEXT = 'The free public servers are busy right now.';
+export class BusyError extends Error { constructor() { super(BUSY_TEXT); this.name = 'BusyError'; } }
+export function isBusy(e: any): boolean { return e instanceof BusyError || BUSY_CODES.has(e?.code) || e?.name === 'AbortError' || BUSY_RE.test(String(e?.message ?? e ?? '')); }
+/** Exponential backoff with jitter: ~0.7s, 1.4s, 2.8s, 5.6s, 11s, then 15s. */
+/** Test hook: return a fake Response (or null to pass through) to simulate busy servers; scale shortens waits. */
+export const netTest: { fake: ((url: string, init?: RequestInit) => Response | null) | null; scale: number } = { fake: null, scale: 1 };
+export const backoff = (i: number) => Math.min(15000, 700 * 2 ** i) * (0.75 + Math.random() * 0.5) * netTest.scale;
 async function fetchJSON(url: string, init: RequestInit | undefined, timeoutMs = 60000): Promise<any> {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     stats.requests++;
     const h = (stats.hosts[hostOf(url)] ??= { n: 0, fail: 0, slow: 0 }); h.n++; const t0 = Date.now();
     try {
-      const r = await fetch(url, { ...init, signal: ctl.signal });
+      const r = (netTest.fake && netTest.fake(url, init)) || await fetch(url, { ...init, signal: ctl.signal });
       if (r.status === 429) stats.rateHits++;
-      if (r.status === 429 || r.status >= 500) throw new Error('HTTP ' + r.status);
+      if (r.status === 429 || r.status >= 500) throw Object.assign(new Error('HTTP ' + r.status), { code: r.status === 429 ? 429 : undefined });
       const j = await r.json();
       if (j?.error && /rate|too many requests|exceeded/i.test(String(j.error.message || ''))) stats.rateHits++;
       if (j?.error && RANGE_RE.test(String(j.error.message || ''))) stats.rangeHits++;
@@ -56,26 +69,33 @@ async function fetchJSON(url: string, init: RequestInit | undefined, timeoutMs =
 export class RpcError extends Error { constructor(msg: string, public code?: number) { super(msg); } }
 
 /** One JSON-RPC call against the archive endpoints (round-robin, retry, failover). */
+/** Calls that only read the newest state can also use the non-archive public nodes (they prune old state and old receipts). */
+const latestOnly = (method: string, params: any[]) => method === 'eth_blockNumber' || (['eth_call', 'eth_getCode', 'eth_getBalance'].includes(method) && params[params.length - 1] === 'latest');
 export async function rpc(method: string, params: any[], opts: { endpoints?: string[]; timeoutMs?: number; tries?: number } = {}): Promise<any> {
-  const eps = opts.endpoints ?? REG.rpc.archive;
-  const tries = opts.tries ?? 6; let err: any;
-  for (let i = 0; i < tries; i++) {
-    const url = pick(eps, i);
+  const base = opts.endpoints ?? REG.rpc.archive;
+  const extra: string[] = !opts.endpoints && latestOnly(method, params) ? ((REG.rpc as any).latestOnly ?? []) : [];
+  const tries = opts.tries ?? 6; let err: any; let busyN = 0;
+  for (let i = 0; i < tries + busyN; i++) {
+    // after two misses, rotate over every endpoint that can answer this call
+    const url = i >= 2 && extra.length ? pick([...base, ...extra], i) : pick(base, i);
     try {
       const j = await lim(url, 10).run(() => fetchJSON(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }, opts.timeoutMs ?? 60000));
       if (j.error) {
         const m = String(j.error.message || j.error);
         // deterministic errors: don't hammer
-        if (/execution reverted|invalid|limited to|too many|range/i.test(m)) throw new RpcError(m, j.error.code);
-        throw new Error(m);
+        if (/execution reverted|invalid|limited to|too many|range/i.test(m) && !BUSY_RE.test(m) && !BUSY_CODES.has(j.error.code)) throw new RpcError(m, j.error.code);
+        throw Object.assign(new Error(m), { code: j.error.code });
       }
       return j.result;
     } catch (e: any) {
       err = e; stats.errors++;
       if (e instanceof RpcError && !/too many|rate/i.test(e.message)) throw e;
-      stats.retries++; await sleep(400 * (i + 1) + Math.random() * 300);
+      stats.retries++;
+      const busy = isBusy(e); if (busy && busyN < 4) busyN++;       // busy servers get up to 4 extra, slower attempts
+      await sleep(busy ? backoff(i) : 400 * (i + 1) + Math.random() * 300);
     }
   }
+  if (isBusy(err)) { console.warn('PulseBasis: RPC still busy after retries:', String(err?.message || err).slice(0, 200)); throw new BusyError(); }
   throw err;
 }
 
@@ -86,21 +106,21 @@ export async function rpcBatch(reqs: [string, any[]][], size = 25): Promise<any[
   for (let i = 0; i < reqs.length; i += size) groups.push(Array.from({ length: Math.min(size, reqs.length - i) }, (_, k) => i + k));
   await Promise.all(groups.map(async g => {
     let err: any;
-    for (let t = 0; t < 5; t++) {
+    for (let t = 0; t < 9; t++) {
       const url = pick(REG.rpc.archive, t);
       try {
         const j = await lim(url, 10).run(() => fetchJSON(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(g.map((k, id) => ({ jsonrpc: '2.0', id, method: reqs[k][0], params: reqs[k][1] }))) }, 60000));
         if (!Array.isArray(j)) throw new Error('bad batch');
         const byId = new Map<number, any>(j.map((x: any) => [x.id, x]));
         const missing = g.filter((_, id) => !byId.get(id) || byId.get(id).error);
-        if (missing.length > g.length / 2 && t < 4) throw new Error('batch errors');
+        if (missing.length > g.length / 2 && t < 8) throw new Error(g.some((_, id) => isBusy(byId.get(id)?.error ?? {})) ? 'busy batch' : 'batch errors');
         g.forEach((k, id) => { out[k] = byId.get(id)?.result ?? null; });
         // retry individually the few that failed
         for (const [id, k] of g.entries()) if (!byId.get(id) || byId.get(id).error) { try { out[k] = await rpc(reqs[k][0], reqs[k][1]); } catch { out[k] = null; } }
         return;
-      } catch (e) { err = e; stats.retries++; await sleep(500 * (t + 1)); }
+      } catch (e) { err = e; stats.retries++; if (!isBusy(e) && t >= 4) break; await sleep(isBusy(e) ? backoff(t) : 500 * (t + 1)); }
     }
-    throw err;
+    throw isBusy(err) ? new BusyError() : err;
   }));
   return out;
 }
@@ -178,8 +198,8 @@ async function logsAdaptive(filter: LogFilter, a: number, b: number, onProgress?
         if (RANGE_RE.test(m)) { const c = capOf(m); epCap.set(ep, c && c < size ? c : Math.max(1, Math.floor(size / 2))); jobs.unshift(job); continue; }
         if ((TOOMANY_RE.test(m) || e?.name === 'AbortError') && size > 1) { const mid = job.a + Math.floor(size / 2); jobs.unshift({ a: job.a, b: mid - 1, fails: 0 }, { a: mid, b: job.b, fails: 0 }); win = Math.max(1, Math.floor(size / 2)); continue; }
         job.fails++; stats.retries++;
-        if (job.fails > 8) throw new Error('The PulseChain RPC endpoints are not answering right now.');
-        await sleep(500 * job.fails + Math.random() * 400); jobs.push(job);
+        if (job.fails > 10) throw new BusyError();
+        await sleep(isBusy(e) ? backoff(job.fails) : 500 * job.fails + Math.random() * 400); jobs.push(job);
       }
     }
   };
@@ -221,17 +241,17 @@ export async function scan(params: Record<string, string | number>): Promise<any
     try {
       const j = await lim('scan', 4).run(() => fetchJSON(url, undefined, 90000));
       return j;
-    } catch (e) { err = e; stats.retries++; await sleep(1000 * (i + 1)); }
+    } catch (e) { err = e; stats.retries++; await sleep(isBusy(e) ? backoff(i + 1) : 1000 * (i + 1)); }
   }
-  throw err;
+  throw isBusy(err) ? new BusyError() : err;
 }
 export async function scanV2(path: string): Promise<any> {
   let err: any;
   for (let i = 0; i < 4; i++) {
     try { return await lim('scan', 4).run(() => fetchJSON(REG.rpc.scanV2 + path, undefined, 45000)); }
-    catch (e) { err = e; await sleep(800 * (i + 1)); }
+    catch (e) { err = e; await sleep(isBusy(e) ? backoff(i + 1) : 800 * (i + 1)); }
   }
-  throw err;
+  throw isBusy(err) ? new BusyError() : err;
 }
 export async function graphql(url: string, query: string): Promise<any> {
   let err: any;
@@ -240,9 +260,9 @@ export async function graphql(url: string, query: string): Promise<any> {
       const j = await lim('graph', 4).run(() => fetchJSON(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) }, 90000));
       if (j.errors) throw new Error(JSON.stringify(j.errors).slice(0, 200));
       return j.data;
-    } catch (e) { err = e; await sleep(1000 * (i + 1)); }
+    } catch (e) { err = e; await sleep(isBusy(e) ? backoff(i + 1) : 1000 * (i + 1)); }
   }
-  throw err;
+  throw isBusy(err) ? new BusyError() : err;
 }
 
 /** GET JSON from any public API (Ethereum explorer, price API) with per-host concurrency + retries. */
@@ -250,7 +270,7 @@ export async function getJSON(url: string, tries = 4, timeoutMs = 45000): Promis
   let err: any; const h = (() => { try { return new URL(url).hostname; } catch { return url; } })();
   for (let i = 0; i < tries; i++) {
     try { return await lim(h, 4).run(() => fetchJSON(url, undefined, timeoutMs)); }
-    catch (e) { err = e; stats.retries++; await sleep(800 * (i + 1) + Math.random() * 400); }
+    catch (e) { err = e; stats.retries++; await sleep(isBusy(e) ? backoff(i + 1) : 800 * (i + 1) + Math.random() * 400); }
   }
-  throw err;
+  throw isBusy(err) ? new BusyError() : err;
 }

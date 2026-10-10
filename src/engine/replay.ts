@@ -15,6 +15,8 @@ const venueById = (id: string) => R.venues.find((r: any) => r.id === id);
 const LIB = new Set<string>(rampById('libertyswap').match.txTo);
 const LIB_OUT = new Set<string>(rampById('libertyswap').outTo);
 const CUSTODIAL = new Set<string>(rampById('custodial').match.from);
+const PULSELN = new Set<string>(rampById('pulseln').match.from);
+const LPM = new Set<string>(((R.lpManagers?.list ?? []) as string[]).map(lc));
 const OMNI_OUT = new Set<string>(rampById('omnibridge').outTo);
 const GOPULSE = venueById('gopulse').to[0] as string;
 const GPFEE = venueById('gopulse').feeCollector[0] as string;
@@ -192,6 +194,7 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
   const P = (a: string) => (pools[a] ??= [0, 0]);
   let staked: [number, number] = [0, 0];
   const events: any[] = [], acq: (Acq & { _lot?: Lot })[] = [], moneyin: MoneyIn[] = [], moneyout: MoneyOut[] = [], income: ReplayOut['income'] = [], gas: ReplayOut['gas'] = [], fees: ReplayOut['fees'] = [];
+  const lpPos: Record<string, { c: number; mv: number }> = {};
   const warn: Record<string, number> = {}; const W_ = (k: string, v = 1) => { warn[k] = (warn[k] ?? 0) + v; };
   const LOTS: Record<string, Lot[]> = {}; const LAST: Record<string, Lot> = {};
   const unknownSenders = new Set<string>(); const unpricedIn: ReplayOut['unpricedIn'] = []; const junkAssets = new Set<string>();
@@ -301,6 +304,25 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
     }
     const nIn = Object.keys(ins).length, nOut = Object.keys(outs).length;
     if (!nIn && !nOut) continue;
+    // Concentrated-liquidity positions (v3 NFT position managers, e.g. 9mm v3): coins put in are not sold and coins
+    // taken out are not new money. Their cost moves into the position and comes back out with the withdrawals,
+    // in proportion to market value; anything beyond the deposited value comes out at $0 (fees/gains earned).
+    const lpKey = LPM.has(to) ? to : [...Object.values(cps)].flatMap(x => [...x]).find(c => LPM.has(c) || /NonfungiblePositionManager/i.test(senders[c]?.name ?? ''));
+    if (lpKey && ours && (nIn === 0) !== (nOut === 0)) {
+      const L = (lpPos[lpKey] ??= { c: 0, mv: 0 });
+      if (nOut) {
+        for (const [a, q] of Object.entries(outs)) { const c = take(a, q); L.c += c; L.mv += isJL(a) ? 0 : (mv(a, q, ts) ?? 0); }
+        events.push([ts, 'lp_in', { ...outs }, {}, 0, lpKey]); continue;
+      }
+      let back = 0;
+      for (const [a, q] of Object.entries(ins)) {
+        const m = isJL(a) ? 0 : (mv(a, q, ts) ?? 0); const f = L.mv > 0 ? Math.min(1, m / L.mv) : 0; const c = L.c * f;
+        L.c -= c; L.mv = Math.max(0, L.mv - m); back += c;
+        add(a, q, c, c > 0 ? 'acq' : 'free', ts);
+        if (c <= 0 && (COINS as readonly string[]).includes(a)) income.push([ts, 'Liquidity position earnings', a, q, m]);
+      }
+      events.push([ts, 'lp_out', {}, { ...ins }, back, lpKey]); continue;
+    }
     if (nIn && nOut) {
       let cost = 0; const desc: string[] = [];
       for (const [a, q] of Object.entries(outs)) { cost += take(a, q); desc.push(`${fmtq(q)} ${symOf(a, meta)}`); }
@@ -348,6 +370,7 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
       const mintRamp = cpall.size === 1 && cpall.has(ZERO) ? MINT_RAMPS.find(m => insKeys.every(a => [...(cps[a] ?? [])].length && t.flows.some(f => f.v > 0 && asset(f.tok) === a && m.toks.has(f.tok)))) : undefined;
       const sInfo = [...cpall].map(c => senders[c]).filter(Boolean);
       if (LIB.has(to) && !ours) { kind = 'LibertySwap bridge-in'; gross = 1 / (1 - rampById('libertyswap').feePctIn / 100); ramp = 'libertyswap'; }
+      else if (PULSELN.has(sender) || [...cpall].some(c => PULSELN.has(c))) { kind = 'PulseLN swap payout'; ramp = 'pulseln'; flag = 'spread_unknown'; }
       else if (CUSTODIAL.has(sender) || [...cpall].some(c => CUSTODIAL.has(c))) { kind = 'Swap service payout (SwapToPulse / ChangeNOW-type)'; ramp = 'custodial'; flag = 'spread_unknown'; }
       else if (insKeys.length === 1 && insKeys[0] === 'WETH' && cpall.size === 1 && cpall.has(ZERO)) { kind = 'ETH bridged in from Ethereum (OmniBridge)'; ramp = 'omnibridge'; }
       else if ([...cpall].every(c => c === MASTERCHEF) || (insKeys.every(a => a === 'INC') && to === MASTERCHEF)) { kind = 'farm_reward'; gross = 0; ramp = 'farm'; }

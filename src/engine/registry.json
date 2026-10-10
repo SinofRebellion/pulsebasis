@@ -259,6 +259,16 @@
       "wpls_is_t0": true
     }
   },
+  "lpManagers": {
+    "notes": "Uniswap-v3-style NonfungiblePositionManager contracts on PulseChain (9mm v3 and forks) with 500+ transactions, read from the PulseChain explorer. Coins put into a position are not sold and coins taken out are not new money: cost moves into the position and back out.",
+    "list": [
+      "0xcc05bf158202b4f461ede8843d76dcd7bbad07f2",
+      "0x19b1347900840e7a299f339868881750918fad91",
+      "0x46a15b0b27311cedf172ab29e4f4766fbe7f4364",
+      "0xbfd64d5f12ec1389460d02861cbbb939b99230c6",
+      "0x2a40fb22b62d75ecd52b7a1d44ee6c4d338a9ba1"
+    ]
+  },
   "ramps": [
     {
       "id": "omnibridge",
@@ -399,6 +409,30 @@
       "verifiedNote": "Escrow address on PulseChain not published; detected by the explorer contract name containing 'Escrow'.",
       "sources": [
         "provex.dev / provex.com (fee 1% buyer + 1% seller)"
+      ]
+    },
+    {
+      "id": "pulseln",
+      "name": "PulseLN (Lightning BTC / multi-chain swap)",
+      "category": "custodial",
+      "color": "#f7931a",
+      "match": {
+        "from": [
+          "0x8ded9b33cfa04ccb1dacf8c24c8da600f57f3baf",
+          "0xc3fd0be2351726eff3afc1861f1ba4bf719205a1"
+        ]
+      },
+      "valuation": "arrival_market",
+      "flag": "spread_unknown",
+      "fee": {
+        "text": "PulseLN's exchange fee and BTC/PLS rate are applied off-chain (lower for PLN holders), so they can't be read from PulseChain."
+      },
+      "accuracy": "medium",
+      "verified": "observed",
+      "verifiedNote": "Payout hot wallets traced on-chain: 0x8ded…3baf pays out PulseLN's own PLN token and trades directly with the PLN token deployer 0x15c6…240e; on 2025-07-09 it funded 0xc3fd…05a1 (1.41B PLS via 0xdfac…c39e), which took over payouts from then on. Not publicly labeled by PulseLN.",
+      "sources": [
+        "pulseln.com / help.pulseln.com (swap flow: coins are sent to your receiving address after the deposit confirms)",
+        "PLN token 0xa685c45fd071df23278069db9137e124564897d0 (creator 0x15c6dc881637dd0ecbf2b61039ed6d78ae54240e) on PulseChain explorer"
       ]
     },
     {
@@ -579,6 +613,11 @@
       "https://rpc.pulsechain.com",
       "https://rpc-pulsechain.g4mm4.io"
     ],
+    "latestOnly": [
+      "https://pulsechain-rpc.publicnode.com",
+      "https://rpc.pulsechainrpc.com",
+      "https://rpc.pulsechainstats.com"
+    ],
     "logs": [
       "https://rpc.pulsechain.com"
     ],
@@ -607,6 +646,9 @@
     ],
     "scan": "https://eth.blockscout.com/api",
     "scanV2": "https://eth.blockscout.com/api/v2",
+    "scanFallback": [
+      "https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api"
+    ],
     "prices": "https://coins.llama.fi",
     "stables": {
       "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": [

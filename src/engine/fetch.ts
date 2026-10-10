@@ -1,7 +1,7 @@
 import REG from './registry.json';
 import type { KV } from './cache';
 import { rpc, rpcBatch, getLogsAll, scan, scanV2, graphql } from './net';
-import { TRANSFER_TOPIC, STAKE_START_TOPIC, STAKE_END_TOPIC, SEL, addrTopic, pad32, u, encodeTryAggregate, decodeTryAggregate, words, decodeString, pool, chunk, lc, type Call } from './util';
+import { TRANSFER_TOPIC, STAKE_START_TOPIC, STAKE_END_TOPIC, SEL, addrTopic, pad32, u, encodeTryAggregate, decodeTryAggregate, words, decodeString, pool, chunk, lc, toFloat, type Call } from './util';
 
 export type Progress = (p: { phase: string; detail: string; pct: number }) => void;
 
@@ -392,7 +392,23 @@ export async function collect(addrsIn: string[], kv: KV, progress: Progress, opt
   // 9. exact-block reserves (pool state at block-1) for every block with activity, + latest
   const pairKeys = Object.keys(REG.pairs);
   const pairCalls: Call[] = pairKeys.map(k => ({ target: (REG.pairs as any)[k].pair, data: '0x' + SEL.getReserves }));
-  const resBlocks = [...new Set([...blocks, ...[...allTx.values()].filter(b => b > fork)].map(b => b - 1))].sort((a, b) => a - b);
+  // Only blocks where a priced coin actually moves need pool reserves. Junk-token airdrops and sub-$0.50 PLS
+  // reflections paid out by dividend-token contracts (internal transfers) (tens of thousands per wallet for some holders) are counted as free
+  // anyway, so they fall back to the daily price instead of costing one archive call each.
+  const pricedTok = new Set<string>(); for (const a of Object.values<any>(REG.assets)) for (const t of a.tokens) if (t !== 'PLS') pricedTok.add(lc(t));
+  const plsDay = new Map<number, number>(); for (const k of ['v1_PLS', 'v2_PLS']) for (const r of daily[k] ?? []) { const p = parseFloat(r.priceUSD); if (p > 0 && !plsDay.has(Math.floor(r.date / 86400))) plsDay.set(Math.floor(r.date / 86400), p); }
+  const plsUsd = (wei: string, ts: number) => { const d = Math.floor(ts / 86400); for (let k = 0; k < 60; k++) { const p = plsDay.get(d - k) ?? plsDay.get(d + k); if (p) return toFloat(BigInt(wei || '0'), 18) * p; } return Infinity; };
+  const sentByUs = new Set<string>(); for (const a of addrs) for (const x of per[a].txlist) if (lc(x.from) === a) sentByUs.add(lc(x.hash));
+  const priceBlocks = new Set<number>();
+  for (const l of stakeEnds) priceBlocks.add(parseInt(l.blockNumber, 16));
+  for (const a of addrs) {
+    const d = per[a];
+    for (const x of d.txlist) if (sentByUs.has(lc(x.hash)) || x.value !== '0') priceBlocks.add(+x.blockNumber);   // direct sends (ramps, exchanges): always exact
+    for (const x of d.internal) if (sentByUs.has(lc(x.transactionHash)) || plsUsd(x.value, +x.timeStamp) >= 0.5) priceBlocks.add(+x.blockNumber);
+    for (const l of [...d.logsIn, ...d.logsOut]) if (pricedTok.has(lc(l.address)) || sentByUs.has(lc(l.transactionHash))) priceBlocks.add(parseInt(l.blockNumber, 16));
+  }
+  const resBlocks = [...new Set([...priceBlocks].filter(b => b > fork).map(b => b - 1))].sort((a, b) => a - b);
+  timings.resSkipped = new Set([...blocks, ...[...allTx.values()].filter(b => b > fork)]).size - resBlocks.length;
   const reserves: Raw['reserves'] = {};
   const rc = await kv.getMany<any>(resBlocks.map(b => 'res:' + b));
   const missR = resBlocks.filter((_, i) => !rc[i]); resBlocks.forEach((b, i) => { if (rc[i]) reserves[b] = rc[i]; });
