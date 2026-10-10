@@ -39,9 +39,9 @@ export default function App() {
       const m = e.data;
       if (m.type === 'progress') { setProg(m); setSteps(s => s[s.length - 1] === m.phase ? s : [...s, m.phase]); }
       if (m.type === 'done') { trackScan(m.health); setReport(m.report); (window as any).__PB = { report: m.report, ms: m.ms, requests: m.requests, timings: m.timings }; setRunInfo({ ms: m.ms, requests: m.requests }); setStatus('done'); wk.terminate(); setTimeout(() => document.getElementById('position')?.scrollIntoView({ behavior: 'smooth' }), 80); }
-      if (m.type === 'error') { trackScan(m.health); setErr(m.message); setStatus('error'); wk.terminate(); }
+      if (m.type === 'error') { trackScan(m.health); setErr(m.kind === 'busy' ? 'busy' : 'other'); setStatus('error'); wk.terminate(); }
     };
-    wk.onerror = e => { setErr(e.message || 'Worker failed'); setStatus('error'); };
+    wk.onerror = e => { console.warn('PulseBasis: worker error', e.message); setErr('other'); setStatus('error'); };
     wk.postMessage({ type: 'run', addrs: valid.map(w => w.address.trim().toLowerCase()), manual: manualRef.current });
   };
   const [cleared, setCleared] = useState('');
@@ -113,9 +113,8 @@ export default function App() {
           <ol className="steps">{steps.map((s, i) => <li key={i} className={i === steps.length - 1 ? 'on' : 'done'}>{s}</li>)}</ol>
           <p className="muted small">First run downloads your full history and prices every block you traded in (about 1–3 minutes for hundreds of trades). Re-runs use your browser's cache and take seconds.</p>
         </div>}
-        {status === 'error' && <div className="card error-card" data-testid="error"><b>We couldn't finish reading the chain this time.</b><p>The free public PulseChain servers are busy or limiting requests right now. Everything downloaded so far is saved in your browser, so the next try picks up where this one stopped.</p>
-          <div className="form-actions"><button className="btn primary" onClick={run}>Try again</button></div>
-          <details className="muted small"><summary>Technical details</summary>{err}</details></div>}
+        {status === 'error' && <div className="card error-card" data-testid="error"><b>{err === 'busy' ? 'The servers are busy right now' : "We couldn't finish reading the chain this time"}</b><p>The free public servers we read from are busy or limiting requests. Your progress is saved, so tap Resume and it picks up right where it stopped.</p>
+          <div className="form-actions"><button className="btn primary" onClick={run} data-testid="resume">Resume</button></div></div>}
       </section>
 
       {report && report.accuracy.txs === 0 && <main className="report" data-testid="report-empty"><section className="sec" id="position"><div className="card story">
@@ -123,6 +122,7 @@ export default function App() {
         <p>These wallets have no transactions on PulseChain since the May 2023 launch, and no HEX, PLS, PLSX, INC or PRVX right now. Double-check that you pasted the address you actually use on PulseChain (the same 0x address works on Ethereum, Base and others; we read PulseChain, plus HEX on Ethereum).</p>
       </div>{report.eth?.status === 'ok' && report.eth.any && <OtherChains r={report} />}</section></main>}
       {report && report.accuracy.txs > 0 && <main className="report" data-testid="report">
+        {(report as any).ethWarning && <div className="card warn-card eth-warn" role="status" data-testid="eth-warning"><b>Ethereum history incomplete.</b> {(report as any).ethWarning}</div>}
         <Position r={report} labels={labels} />
         <SacrificeSection r={report} manual={manual} onApply={applyManual} busy={status === 'running'} />
         <CostSection r={report} />
@@ -154,7 +154,7 @@ function Footer() {
         <p>Free, client-side cost-basis analysis for Richard Heart ecosystem coins on PulseChain. Math only, not financial or tax advice.</p>
         <p className="credit" data-testid="credit">Idea &amp; creation by <a href="https://x.com/sinofrebellion" target="_blank" rel="noopener noreferrer">@sinofrebellion</a> · Launched Oct 10, 2026 · <a className="src-link" href="https://github.com/SinofRebellion/pulsebasis" target="_blank" rel="noopener noreferrer" data-testid="source-link">Source code</a></p>
         <p className="disclaimer"><b>Unofficial.</b> PulseBasis is an independent community tool. It is not affiliated with, endorsed by, or connected to Richard Heart, HEX, PulseChain, PulseX or any project named here.</p></div>
-      <div><b>Data sources</b><ul><li>PulseChain archive RPC (rpc.pulsechain.com, rpc-pulsechain.g4mm4.io)</li><li>PulseChain explorer API (api.scan.pulsechain.com)</li><li>PulseX v1/v2 subgraphs (graph.pulsechain.com)</li><li>HEX contract (stakes, daily payouts)</li></ul></div>
+      <div><b>Data sources</b><ul><li>PulseChain archive RPC (rpc.pulsechain.com, rpc-pulsechain.g4mm4.io), plus PublicNode, pulsechainrpc.com and pulsechainstats.com for current data</li><li>PulseChain explorer API (api.scan.pulsechain.com)</li><li>PulseX v1/v2 subgraphs (graph.pulsechain.com)</li><li>HEX contract (stakes, daily payouts)</li><li>Ethereum: Blockscout (eth.blockscout.com) and public Ethereum RPCs; prices from DefiLlama</li><li data-testid="routescan-credit">Ethereum backup data <a href="https://routescan.io" target="_blank" rel="noreferrer noopener">Powered by Routescan</a></li></ul></div>
       <div><b>Quote sources</b><ul>{[...new Map(QUOTES.map(q => [q.url, q])).values()].map(q => <li key={q.url}><a href={q.url} target="_blank" rel="noreferrer noopener">{q.src}</a></li>)}</ul><p className="muted small">Quotes are shown for culture and context only; no endorsement is implied.</p></div>
     </div>
   </footer>;

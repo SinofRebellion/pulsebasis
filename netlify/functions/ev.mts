@@ -3,7 +3,7 @@ import { getStore } from '@netlify/blobs';
 import type { Config } from '@netlify/functions';
 import { isLocalRef } from '../../src/stats/summarize';
 
-const HOSTS = new Set(['rpc.pulsechain.com', 'rpc-pulsechain.g4mm4.io', 'pulsechain-rpc.publicnode.com', 'api.scan.pulsechain.com', 'graph.pulsechain.com', 'eth.blockscout.com', 'ethereum-rpc.publicnode.com', 'eth.drpc.org', 'eth-mainnet.public.blastapi.io', 'coins.llama.fi']);
+const HOSTS = new Set(['rpc.pulsechain.com', 'rpc-pulsechain.g4mm4.io', 'pulsechain-rpc.publicnode.com', 'api.scan.pulsechain.com', 'graph.pulsechain.com', 'eth.blockscout.com', 'ethereum-rpc.publicnode.com', 'eth.drpc.org', 'eth-mainnet.public.blastapi.io', 'coins.llama.fi', 'api.routescan.io', 'rpc.pulsechainrpc.com', 'rpc.pulsechainstats.com']);
 const int = (v: unknown, max: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(max, n)) : 0; };
 const REF = /^[a-z0-9.-]{1,60}$/;
 
