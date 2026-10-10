@@ -24,4 +24,7 @@ ok('server names are plain English', S.servers[0]?.name === 'PulseChain main ser
 const c = clean({ k: 'scan', ok: true, ms: 1e12, attempts: 2, address: '0xabc', wallets: 4, hosts: { 'evil.com': { n: 1 }, 'rpc.pulsechain.com': { n: 5, fail: 1, slow: 0 } }, extra: 'x' });
 ok('sanitizer drops unknown fields/hosts and clamps', !('address' in c) && !('extra' in c) && !c.h['evil.com'] && c.h['rpc.pulsechain.com'][0] === 5 && c.ms === 3600000, JSON.stringify(c));
 ok('visit referrer sanitized', clean({ k: 'visit', ref: '<script>' }).ref === '' && clean({ k: 'visit', ref: 'x.com' }).ref === 'x.com');
+ok('local/probe referrers dropped', clean({ k: 'visit', ref: 'probe.local' }).ref === '' && clean({ k: 'visit', ref: 'localhost' }).ref === '' && clean({ k: 'visit', ref: 't.co' }).ref === 't.co');
+{ const now = Date.now(); const ev: any[] = [{ t: now, k: 'visit', ref: 'probe.local' }, { t: now, k: 'visit', ref: '127.0.0.1' }, { t: now, k: 'visit', ref: 'x.com' }];
+  const R = summarize(ev, now); ok('dashboard referrers exclude probe.local/localhost', JSON.stringify(R.refs) === JSON.stringify([['x.com', 1]]), JSON.stringify(R.refs)); }
 console.log(bad ? `FAILED ${bad}` : 'ALL PASSED'); process.exit(bad ? 1 : 0);

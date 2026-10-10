@@ -1,7 +1,7 @@
 // Telemetry + owner dashboard test (production). Usage: node test/dash.mjs <baseUrl> <outDir>
 import { chromium, devices } from 'playwright'; import fs from 'node:fs';
 const BASE = (process.argv[2] || 'https://pulsebasis.netlify.app/').replace(/\/$/, ''); const OUT = process.argv[3] || 'test/out'; fs.mkdirSync(OUT, { recursive: true });
-const KEY = (process.env.PB_STATS_KEY || '').trim();
+const KEY = fs.readFileSync('/home/box/.pulsebasis-stats-key', 'utf8').trim();
 let bad = 0; const ok = (n, c, d = '') => { console.log(c ? 'PASS' : 'FAIL', n, d); if (!c) bad++; };
 const b = await chromium.launch(); const errs = [];
 // 1. app sends anonymous events (intercepted, never stored), with no addresses inside
