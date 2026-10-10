@@ -303,3 +303,25 @@ input.bad { border-color: var(--neg); }
 .bn-overall { margin-top: 14px; display: grid; gap: 8px; }
 @media (max-width: 420px) { .bn-grid { grid-template-columns: minmax(0, 1fr); } }
 @media print { .bn, .bn-overall { display: none !important; } }
+
+/* sacrifice coins */
+.sac { display: grid; gap: 10px; }
+.sac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+.sac-row { background: var(--card2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; min-width: 0; display: grid; gap: 8px; }
+.sac-row.nf { border-color: rgba(255,200,97,.45); }
+.sac-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sac-nf { margin: 0; font-size: 13px; color: #ffc861; background: rgba(255,200,97,.08); border: 1px solid rgba(255,200,97,.3); border-radius: 10px; padding: 8px 10px; }
+.sac-tx summary { cursor: pointer; font-size: 13px; color: var(--tx2); font-weight: 600; }
+.sac-tx ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.sac-tx li { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.sac-tx a { color: var(--tx); }
+.sac-form { display: grid; gap: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.sac-form-h { display: grid; gap: 2px; } .sac-form-h span { font-size: 12.5px; color: var(--tx2); }
+.sac-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sac-inputs label { display: grid; gap: 6px; font-size: 14px; color: var(--tx2); font-weight: 600; min-width: 0; }
+.sac-inputs label > span { display: flex; align-items: center; gap: 6px; }
+.coin-sacnf { margin: 6px 0 0; font-size: 12px; color: #ffc861; }
+@media (max-width: 600px) { .sac-inputs { grid-template-columns: minmax(0, 1fr); } }
+@media print { .sac-form { display: none !important; } }
+
+.sac-form .btn { min-height: 48px; } .sac-saved { margin: 0; }

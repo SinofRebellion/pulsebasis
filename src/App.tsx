@@ -8,6 +8,7 @@ import { short } from './format';
 import { TipJar } from './ui/tip';
 import { OtherChains } from './ui/otherchains';
 import { checksumState } from './checksum';
+import { SacrificeSection } from './ui/sacrifice';
 
 type Wallet = { address: string; label: string };
 type Prog = { phase: string; detail: string; pct: number };
@@ -41,13 +42,19 @@ export default function App() {
       if (m.type === 'error') { trackScan(m.health); setErr(m.message); setStatus('error'); wk.terminate(); }
     };
     wk.onerror = e => { setErr(e.message || 'Worker failed'); setStatus('error'); };
-    wk.postMessage({ type: 'run', addrs: valid.map(w => w.address.trim().toLowerCase()) });
+    wk.postMessage({ type: 'run', addrs: valid.map(w => w.address.trim().toLowerCase()), manual: manualRef.current });
   };
   const [cleared, setCleared] = useState('');
+  const SACK = 'pulsebasis:sacrifice';
+  const [manual, setManual] = useState<Record<string, number>>(() => { try { return JSON.parse(localStorage.getItem(SACK) || '{}'); } catch { return {}; } });
+  const manualRef = useRef(manual); manualRef.current = manual;
+  const applyManual = (m: Record<string, number>) => { const clean = Object.fromEntries(Object.entries(m).filter(([, v]) => v > 0)); setManual(clean); manualRef.current = clean;
+    if (Object.keys(clean).length) localStorage.setItem(SACK, JSON.stringify(clean)); else localStorage.removeItem(SACK); run(); };
   const clearCache = () => {
     if (status === 'running') return;
     const wk = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-    const done = () => { wk.terminate(); try { localStorage.removeItem(LS); sessionStorage.clear(); } catch {}
+    const done = () => { wk.terminate(); try { localStorage.removeItem(LS); localStorage.removeItem(SACK); sessionStorage.clear(); } catch {}
+      setManual({}); manualRef.current = {};
       setWallets([{ address: '', label: '' }]); setReport(null); setRunInfo(null); setStatus('idle'); (window as any).__PB = undefined;
       setCleared('Done. Your saved addresses and results were deleted from this device.'); };
     wk.onmessage = done; wk.onerror = done; wk.postMessage({ type: 'clear' });
@@ -117,6 +124,7 @@ export default function App() {
       </div>{report.eth?.status === 'ok' && report.eth.any && <OtherChains r={report} />}</section></main>}
       {report && report.accuracy.txs > 0 && <main className="report" data-testid="report">
         <Position r={report} labels={labels} />
+        <SacrificeSection r={report} manual={manual} onApply={applyManual} busy={status === 'running'} />
         <CostSection r={report} />
         <StakesSection r={report} labels={labels} />
         <MoneySection r={report} />

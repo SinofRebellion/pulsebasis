@@ -8,6 +8,7 @@ import { Donut, BuyChart, Bars, AreaChart } from './charts';
 
 const COINS = ['HEX', 'PLS', 'PLSX', 'INC', 'PRVX'];
 const SCAN = 'https://scan.pulsechain.com';
+const SACNF = 'Sacrifice coins: cost not found';
 const INCOME_LABEL: Record<string, string> = { 'free/dust received': 'Small unsolicited transfers (dust)', 'HEX stake interest': 'HEX stake interest from ended stakes' };
 const VENUE_LABEL: Record<string, string> = { 'PulseX / other DEX': 'Other DEX or router', Other: 'Other contracts' };
 const plc = (n: number) => (n >= 0 ? 'pos' : 'neg');
@@ -58,6 +59,7 @@ export function Position({ r, labels }: { r: Report; labels: Record<string, stri
             <div className="split-legend"><span><i style={{ background: '#ffb020' }} />Liquid {qtyFull(X.liquid)}</span><span><i style={{ background: '#ff3d9a' }} />Staked {qtyFull(X.principal)}</span><span><i style={{ background: '#a259ff' }} />Interest {qtyFull(X.accrued)}</span></div>
           </div>}
           <p className="coin-explain">{c === 'HEX' ? `Average cost includes the free interest. Without it: ${price(X.avg_ex_accr)}.` : p.rise > 0 ? `${c} has to reach ${price(p.avg)} for these coins to be worth what they cost.` : `Above your average cost: every ${c} is worth more than you paid on average.`}</p>
+          {(r.sacrifice?.nfHeld?.[c] ?? 0) > 0 && <p className="coin-sacnf" data-testid={'coin-sacnf-' + c}>Includes {qtyFull(r.sacrifice!.nfHeld[c])} {c} from a sacrifice: cost not found (enter it below)</p>}
           <BuyNow coin={c} qty={p.qty} cost={p.cost} now={p.now} freeQty={c === 'HEX' ? X.accrued : 0} />
         </div>;
       })}
@@ -203,8 +205,8 @@ export function MoneySection({ r }: { r: Report }) {
       <AreaChart points={cum.map(c => ({ label: monthFmt(c.m), t: 0 }))} series={[{ name: 'In', color: '#ff3d9a', values: cum.map(c => c.cumIn) }, { name: 'Out', color: '#18d4ff', values: cum.map(c => c.cumOut) }]} />
       <div className="split-legend"><span><i style={{ background: '#ff3d9a' }} />Money in</span><span><i style={{ background: '#18d4ff' }} />Money out</span></div>
     </div>}
-    {Object.keys(r.incomeBy).length > 0 && <div className="card"><div className="card-title">Free coins (counted at $0 cost)</div>
-      <ul className="fee-list">{Object.entries(r.incomeBy).map(([k, v]) => <li key={k}><span>{INCOME_LABEL[k] ?? k} <small>{Object.entries(v.q).map(([a, q]) => `${qty(q)} ${a}`).join(', ')}</small></span><b>{usd(v.usd)}</b></li>)}</ul>
+    {Object.keys(r.incomeBy).some(k => k !== SACNF) && <div className="card"><div className="card-title">Free coins (counted at $0 cost)</div>
+      <ul className="fee-list">{Object.entries(r.incomeBy).filter(([k]) => k !== SACNF).map(([k, v]) => <li key={k}><span>{INCOME_LABEL[k] ?? k} <small>{Object.entries(v.q).map(([a, q]) => `${qty(q)} ${a}`).join(', ')}</small></span><b>{usd(v.usd)}</b></li>)}</ul>
       <p className="muted small">Value shown is what they were worth when received. Coins that arrive for free come in at $0 cost, which lowers the average cost of that coin.</p></div>}
   </Sec>;
 }
@@ -261,6 +263,7 @@ export function AccuracySection({ r, runInfo, wallets, onClear }: { r: Report; r
           <li><b>Exact-block prices</b> come from PulseX v1/v2 pool reserves right before your transaction, priced in dollars through the deepest stablecoin pools. Thin pools fall back to that day's price.</li>
           <li><b>Average cost:</b> each coin has one cost pool. Selling or sending takes cost out proportionally; swapping carries the cost into the coin you receive.</li>
           <li><b>Free coins</b> (stake interest, farm rewards, bonuses, fork copies) are added at $0, which lowers your average.</li>
+          <li><b>Sacrifice coins</b> (PLS, PLSX and PRVX credited for a sacrifice) carry what you sacrificed, valued in dollars on the day you sent it. If we can't find it and you don't enter it, they show as <i>cost not found</i>.</li>
           <li><b>Stakes:</b> staking moves HEX and its cost into the stake; ending returns principal plus interest with the same cost.</li>
         </ul></div>
     </div>
