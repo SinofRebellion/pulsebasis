@@ -5,7 +5,7 @@ import { stats, resetStats } from './engine/net';
 
 const kv = new IDBKV();
 self.onmessage = async (e: MessageEvent) => {
-  const { type, addrs } = e.data || {};
+  const { type, addrs, manual } = e.data || {};
   if (type === 'clear') { await kv.clear(); (self as any).postMessage({ type: 'cleared' }); return; }
   if (type !== 'run') return;
   resetStats(); const t0 = Date.now(); let attempts = 1;
@@ -15,7 +15,7 @@ self.onmessage = async (e: MessageEvent) => {
     const prog = (p: any) => (self as any).postMessage({ type: 'progress', ...p });
     let r: Awaited<ReturnType<typeof runAll>>;
     for (let attempt = 0; ; attempt++) {
-      try { r = await runAll(addrs, kv, prog); break; }
+      try { r = await runAll(addrs, kv, prog, undefined, manual || {}); break; }
       catch (e: any) {
         if (attempt >= 3) throw e;
         attempts++;

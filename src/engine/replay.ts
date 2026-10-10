@@ -2,6 +2,7 @@
 import REG from './registry.json';
 import type { Raw } from './fetch';
 import { ZERO, lc, toFloat, big, topicAddr } from './util';
+import { PRVX_DISTRIBUTOR, type SacCoin } from './sacrifice';
 
 const R: any = REG;
 export const COINS = ['HEX', 'PLS', 'PLSX', 'INC', 'PRVX'] as const;
@@ -156,10 +157,14 @@ export interface ReplayOut {
   unknownSenders: Set<string>; unpricedIn: { tok: string; sym: string; tx: string; ts: number }[]; junkAssets: Set<string>;
   forkCopy: Record<string, number>; venues: Record<string, { n: number; usd: number; coins: Record<string, number> }>;
   lotsHeld: Record<string, { q: number; c: number; free: number }>;
+  /** coins received from sacrifices: qty, cost given to them, and whether a cost was found */
+  sacRecv: Record<SacCoin, { q: number; c: number; n: number }>; sacnfHeld: Record<string, number>;
 }
+/** Sacrifice cost to spread over the coins each sacrifice produced (found on Ethereum + typed in by the user). */
+export interface SacIn { cost: Record<SacCoin, number>; qty?: Record<SacCoin, number>; ethAtFork: number | null }
 const dstr = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 10);
 
-export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = {}): ReplayOut {
+export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = {}, sac?: SacIn): ReplayOut {
   const OWN = new Set(raw.addrs);
   const meta = raw.tokenMeta;
   const asset = (tok: string): string => {
@@ -227,6 +232,19 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
       const d0 = BigInt('0x' + l.data.slice(2, 66)); forkStaked += Number((d0 >> 40n) & ((1n << 72n) - 1n)) / 1e8;
     }
   }
+  const sacRecv: ReplayOut['sacRecv'] = { PLS: { q: 0, c: 0, n: 0 }, PLSX: { q: 0, c: 0, n: 0 }, PRVX: { q: 0, c: 0, n: 0 } };
+  const unit = (c: SacCoin) => (sac?.qty?.[c] ? (sac.cost[c] || 0) / sac.qty[c] : 0);
+  /** A lot that came from a sacrifice: carries its share of the sacrifice cost, or is flagged 'cost not found'. */
+  const addSac = (c: SacCoin, q: number, ts: number | null) => {
+    const cost = q * unit(c); add(c, q, cost, cost > 0 ? 'sac' : 'sacnf', ts); const r = sacRecv[c]; r.q += q; r.c += cost; r.n++;
+    if (!(cost > 0)) income.push([ts ?? L[0]?.ts ?? 0, 'Sacrifice coins: cost not found', c, q, ts ? (mv(c, q, ts) ?? 0) : 0]);
+  };
+  // PLS at launch = ETH held at the fork (copied 1:1) + PLS credited by the PulseChain sacrifice
+  if (forkCopy['PLS'] > 0) {
+    const all = forkCopy['PLS']; const eth = sac?.ethAtFork;
+    let sq = eth != null ? Math.max(0, all - eth) : ((sac?.cost.PLS ?? 0) > 0 ? all : 0); if (sq < 10) sq = 0;
+    if (sq > 0) { addSac('PLS', sq, null); forkCopy['PLS'] = all - sq; if (forkCopy['PLS'] < 1e-9) delete forkCopy['PLS']; }
+  }
   for (const [as, q] of Object.entries(forkCopy)) { add(as, q, 0, 'free', null); income.push([L[0]?.ts ?? 0, 'Copied at the PulseChain fork', as, q, 0]); }
   if (forkStaked > 0) { staked = [forkStaked, 0]; (LOTS['HEX'] ??= []).push({ q: 0, c: 0, sq: forkStaked, sc: 0, q0: forkStaked, c0: 0, kind: 'free', ts: null }); forkCopy['HEX staked'] = forkStaked; }
 
@@ -271,7 +289,11 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
     for (const a of Object.keys(ins)) {
       // PLSX minted straight to the wallet = the PulseX sacrifice airdrop/claim: free coins, $0 cost
       if (a === 'PLSX' && cps[a]?.size === 1 && cps[a]?.has(ZERO) && !Object.keys(outs).length) {
-        const q = ins[a]; delete ins[a]; add('PLSX', q, 0, 'free', ts); income.push([ts, 'PulseX sacrifice airdrop (PLSX)', 'PLSX', q, mv('PLSX', q, ts) ?? 0]); continue;
+        const q = ins[a]; delete ins[a]; addSac('PLSX', q, ts); continue;
+      }
+      // PRVX paid out by the ProveX distributor = the ProveX sacrifice credit
+      if (a === 'PRVX' && cps[a]?.size === 1 && cps[a]?.has(PRVX_DISTRIBUTOR) && !Object.keys(outs).length) {
+        const q = ins[a]; delete ins[a]; addSac('PRVX', q, ts); continue;
       }
       if (a === 'COM' && cps[a]?.has(ZERO) && !Object.keys(outs).length) {
         const q = ins[a]; delete ins[a]; add('COM', q, 0, 'free', ts); income.push([ts, 'Communis (COM) bonus', 'COM', q, mv('COM', q, ts) ?? 0]);
@@ -382,7 +404,8 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
     freeheld[a] = (LOTS[a] ?? []).filter(l => l.kind === 'free').reduce((s, l) => s + l.q + l.sq, 0);
     lotsHeld[a] = { q: (LOTS[a] ?? []).reduce((s, l) => s + l.q + l.sq, 0), c: (LOTS[a] ?? []).reduce((s, l) => s + l.c + l.sc, 0), free: freeheld[a] };
   }
-  return { pools, staked, acq, moneyin, moneyout, income, gas, fees, events, warn, pstat, freeheld, unknownSenders, unpricedIn, junkAssets, forkCopy, venues, lotsHeld };
+  const sacnfHeld: Record<string, number> = {}; for (const a of Object.keys(LOTS)) { const v = LOTS[a].filter(l => l.kind === 'sacnf').reduce((t, l) => t + l.q + l.sq, 0); if (v > 0) sacnfHeld[a] = v; }
+  return { pools, staked, acq, moneyin, moneyout, income, gas, fees, events, warn, pstat, freeheld, unknownSenders, unpricedIn, junkAssets, forkCopy, venues, lotsHeld, sacRecv, sacnfHeld };
 }
 function fmtq(q: number) { return q >= 1000 ? Math.round(q).toLocaleString('en-US') : q.toPrecision(4); }
 function symOf(a: string, meta: Raw['tokenMeta']) { if (a.includes(':')) return meta[a.split(':')[1]]?.sym ?? a.split(':')[0]; return a; }

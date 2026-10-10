@@ -11,9 +11,11 @@ const cf = process.argv[3] || '/tmp/pb-cache.json';
 class FileKV extends MemoryKV { constructor() { super(); if (fs.existsSync(cf)) this.m = new Map(Object.entries(JSON.parse(fs.readFileSync(cf, 'utf8')))); } save() { fs.writeFileSync(cf, JSON.stringify(Object.fromEntries(this.m))); } }
 const kv = new FileKV();
 const t0 = Date.now(); let last = '';
-const r = await runAll(addrs, kv, p => { const s = `${p.phase}: ${p.detail}`; if (s !== last) { last = s; console.log(((Date.now() - t0) / 1000).toFixed(1) + 's', Math.round(p.pct) + '%', s); } });
+const manual = process.env.MANUAL ? JSON.parse(process.env.MANUAL) : {};
+const r = await runAll(addrs, kv, p => { const s = `${p.phase}: ${p.detail}`; if (s !== last) { last = s; console.log(((Date.now() - t0) / 1000).toFixed(1) + 's', Math.round(p.pct) + '%', s); } }, undefined, manual);
 kv.save();
 const R = r.report;
+console.log('SAC', JSON.stringify({ ...R.sacrifice, txs: R.sacrifice?.txs.length }), JSON.stringify(R.sacrifice?.txs.slice(0, 5)));
 console.log('TIME', r.ms, 'ms', 'requests', r.requests, r.timings);
 console.log('TOTAL cost', R.tot.cost.toFixed(2), 'value', R.tot.value.toFixed(2), 'pl', R.tot.pl.toFixed(2));
 for (const c of ['HEX', 'PLS', 'PLSX', 'INC', 'PRVX']) console.log(c, 'qty', R.percoin[c].qty.toFixed(3), 'cost', R.percoin[c].cost.toFixed(2), 'avg', R.percoin[c].avg.toPrecision(5), 'now', R.now[c].toPrecision(4));
@@ -24,3 +26,4 @@ console.log('ramps', R.moneyIn.ramps.map((x: any) => `${x.name}: $${x.usd.toFixe
 console.log('fees', JSON.stringify(R.fees.gopulse), 'gas', R.fees.gasUsd.toFixed(2), 'poison', R.poison.length, 'stakeHist', R.stakeHist.ended, R.stakeHist.early, R.stakeHist.penalty_usd.toFixed(0), R.stakeHist.payout_usd.toFixed(0));
 console.log('venues', JSON.stringify(R.venues));
 fs.writeFileSync(process.argv[4] || '/tmp/pb-report.json', JSON.stringify(R));
+process.exit(0);

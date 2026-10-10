@@ -174,7 +174,8 @@ export function analyze(raw: Raw, L: Tx[], E: ReplayOut, PR: Prices) {
   return { asOf: raw.latestTs, block: raw.latestBlock, now, nowSrc, percoin, tot, hex, avgOffsetPct, paidInterest, stakes, stakeHist, effective, best, worst,
     moneyIn: { total: IN, n: E.moneyin.length, ramps }, moneyOutTotal: OUT, fees, feesTotal, venues: E.venues, cumulative, buysByMonth, buys, series,
     accuracy: { nAcq, exactN, pctExact: nAcq ? exactN / nAcq * 100 : 100, usdPctExact: usdAcq ? usdExact / usdAcq * 100 : 100, sources: ps, recon, allOk: recon.every(r => r.ok), gaps, txs: L.length },
-    poison, incomeBy, lots, wallets: walletsSummary, freeheld: E.freeheld, forkCopy: E.forkCopy, ehex, eth: null as null | import('./eth').EthReport };
+    poison, incomeBy, lots, wallets: walletsSummary, freeheld: E.freeheld, forkCopy: E.forkCopy, ehex, eth: null as null | import('./eth').EthReport,
+    sacrifice: null as null | { status: 'ok' | 'error'; txs: import('./sacrifice').SacTx[]; found: Record<import('./sacrifice').SacCoin, number>; manual: Record<import('./sacrifice').SacCoin, number>; unpriced: number; ethAtFork: number | null; recv: import('./replay').ReplayOut['sacRecv']; nfHeld: Record<string, number> } };
 }
 export type Report = ReturnType<typeof analyze>;
 function fmt(n: number) { return n >= 1000 ? Math.round(n).toLocaleString('en-US') : n.toFixed(2); }
