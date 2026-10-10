@@ -1,0 +1,630 @@
+{
+  "version": 1,
+  "chainId": 369,
+  "updated": "2026-10-10",
+  "notes": "Every arrival is caught generically from on-chain transfer logs + native/internal transfers. This registry only adds labels, fee rates and better valuation. Anything not matched is still counted at market value on arrival as 'Other / unknown sender'. 'verified' = confirmed from the project's own docs/repo or the PulseChain explorer's verified contract name; 'observed' = seen in real user history but not documented publicly; false = unverified.",
+  "forkBlock": 17233000,
+  "hexDeployBlock": 9041184,
+  "contracts": {
+    "HEX": "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+    "WPLS": "0xa1077a294dde1b09bb078844df40758a5d0f9a27",
+    "MULTICALL3": "0xca11bde05977b3631167028862be2a173976ca11",
+    "PULSEX_FACTORY_V1": "0x1715a3e4a142d8b698131108995174f37aeba10d",
+    "PULSEX_FACTORY_V2": "0x29ea7545def87022badc76323f373ea1e707c523"
+  },
+  "assets": {
+    "PLS": {
+      "name": "PulseChain",
+      "dec": 18,
+      "rh": true,
+      "tokens": [
+        "PLS",
+        "0xa1077a294dde1b09bb078844df40758a5d0f9a27"
+      ],
+      "pairs": [],
+      "subgraphToken": "0xa1077a294dde1b09bb078844df40758a5d0f9a27"
+    },
+    "HEX": {
+      "name": "HEX",
+      "dec": 8,
+      "rh": true,
+      "tokens": [
+        "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39"
+      ],
+      "pairs": [
+        "v1_HEX",
+        "v2_HEX"
+      ],
+      "subgraphToken": "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39"
+    },
+    "PLSX": {
+      "name": "PulseX",
+      "dec": 18,
+      "rh": true,
+      "tokens": [
+        "0x95b303987a60c71504d99aa1b13b4da07b0790ab"
+      ],
+      "pairs": [
+        "v1_PLSX",
+        "v2_PLSX"
+      ],
+      "subgraphToken": "0x95b303987a60c71504d99aa1b13b4da07b0790ab"
+    },
+    "INC": {
+      "name": "Incentive",
+      "dec": 18,
+      "rh": true,
+      "tokens": [
+        "0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d"
+      ],
+      "pairs": [
+        "v1_INC",
+        "v2_INC"
+      ],
+      "subgraphToken": "0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d"
+    },
+    "PRVX": {
+      "name": "ProveX",
+      "dec": 18,
+      "rh": true,
+      "tokens": [
+        "0xf6f8db0aba00007681f8faf16a0fda1c9b030b11"
+      ],
+      "pairs": [
+        "v1_PRVX",
+        "v2_PRVX"
+      ],
+      "subgraphToken": "0xf6f8db0aba00007681f8faf16a0fda1c9b030b11"
+    },
+    "USD": {
+      "name": "Bridged stablecoins ($1)",
+      "dec": 18,
+      "rh": false,
+      "stable": true,
+      "tokens": [
+        "0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07",
+        "0xefd766ccb38eaf1dfd701853bfce31359239f305",
+        "0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f",
+        "0x600136da8cc6d1ea07449514604dc4ab7098db82",
+        "0x2933a799e88ce013adb44389269dc87d0c672d42"
+      ],
+      "tokenNotes": {
+        "0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07": "USDC from Ethereum (OmniBridge)",
+        "0xefd766ccb38eaf1dfd701853bfce31359239f305": "DAI from Ethereum (OmniBridge)",
+        "0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f": "USDT from Ethereum (OmniBridge)",
+        "0x600136da8cc6d1ea07449514604dc4ab7098db82": "CST (Coast, 1:1 USD)",
+        "0x2933a799e88ce013adb44389269dc87d0c672d42": "USDC (Hyperlane warp route, HypERC20)"
+      },
+      "pairs": []
+    },
+    "WETH": {
+      "name": "WETH from Ethereum",
+      "dec": 18,
+      "rh": false,
+      "tokens": [
+        "0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c"
+      ],
+      "pairs": [
+        "v1_WETH"
+      ],
+      "subgraphToken": "0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c"
+    },
+    "WBTC": {
+      "name": "WBTC from Ethereum",
+      "dec": 8,
+      "rh": false,
+      "tokens": [
+        "0xb17d901469b9208b17d916112988a3fed19b5ca1"
+      ],
+      "pairs": [
+        "v1_WBTC",
+        "v2_WBTC"
+      ],
+      "subgraphToken": "0xb17d901469b9208b17d916112988a3fed19b5ca1"
+    },
+    "EHEX": {
+      "name": "eHEX (HEX from Ethereum, bridged)",
+      "dec": 8,
+      "rh": false,
+      "tokens": [
+        "0x57fde0a71132198bbec939b98976993d8d89d225"
+      ],
+      "pairs": [
+        "v1_EHEX"
+      ],
+      "subgraphToken": "0x57fde0a71132198bbec939b98976993d8d89d225"
+    },
+    "PDAI": {
+      "name": "pDAI (fork copy, not $1)",
+      "dec": 18,
+      "rh": false,
+      "tokens": [
+        "0x6b175474e89094c44da98b954eedeac495271d0f"
+      ],
+      "pairs": [
+        "v1_PDAI"
+      ],
+      "subgraphToken": "0x6b175474e89094c44da98b954eedeac495271d0f"
+    },
+    "COM": {
+      "name": "Communis",
+      "dec": 12,
+      "rh": false,
+      "tokens": [
+        "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8"
+      ],
+      "pairs": [],
+      "subgraphToken": "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8"
+    }
+  },
+  "stablePairs": [
+    "v1_DAI",
+    "v1_USDC",
+    "v1_USDT",
+    "v2_USDC",
+    "v2_DAI"
+  ],
+  "stableDec": {
+    "DAI": 18,
+    "USDC": 6,
+    "USDT": 6
+  },
+  "pairs": {
+    "v1_DAI": {
+      "pair": "0xe56043671df55de5cdf8459710433c10324de0ae",
+      "wpls_is_t0": true
+    },
+    "v1_USDC": {
+      "pair": "0x6753560538eca67617a9ce605178f788be7e524e",
+      "wpls_is_t0": false
+    },
+    "v1_USDT": {
+      "pair": "0x322df7921f28f1146cdf62afdac0d6bc0ab80711",
+      "wpls_is_t0": false
+    },
+    "v1_HEX": {
+      "pair": "0xf1f4ee610b2babb05c635f726ef8b0c568c8dc65",
+      "wpls_is_t0": false
+    },
+    "v1_PLSX": {
+      "pair": "0x1b45b9148791d3a104184cd5dfe5ce57193a3ee9",
+      "wpls_is_t0": false
+    },
+    "v1_INC": {
+      "pair": "0xf808bb6265e9ca27002c0a04562bf50d4fe37eaa",
+      "wpls_is_t0": false
+    },
+    "v1_PRVX": {
+      "pair": "0x0a9f57363d2f71e1091def7ca202827c5664f027",
+      "wpls_is_t0": true
+    },
+    "v1_WETH": {
+      "pair": "0x42abdfdb63f3282033c766e72cc4810738571609",
+      "wpls_is_t0": false
+    },
+    "v1_EHEX": {
+      "pair": "0xaa1ea17e7499f892ab9e45e139d843049942fb7a",
+      "wpls_is_t0": false
+    },
+    "v1_PDAI": {
+      "pair": "0x947b4633e32e0c7f2c76753b43f008480715416d",
+      "wpls_is_t0": false
+    },
+    "v1_WBTC": {
+      "pair": "0xdb82b0919584124a0eb176ab136a0cc9f148b2d1",
+      "wpls_is_t0": true
+    },
+    "v2_DAI": {
+      "pair": "0x146e1f1e060e5b5016db0d118d2c5a11a240ae32",
+      "wpls_is_t0": true
+    },
+    "v2_USDC": {
+      "pair": "0x8ebe62d5e9d26b637673d91f56900233d6a4910d",
+      "wpls_is_t0": false
+    },
+    "v2_USDT": {
+      "pair": "0x21e4d9dfb30b097316de38ea49c68776c9735329",
+      "wpls_is_t0": false
+    },
+    "v2_HEX": {
+      "pair": "0x19bb45a7270177e303dee6eaa6f5ad700812ba98",
+      "wpls_is_t0": false
+    },
+    "v2_PLSX": {
+      "pair": "0x149b2c629e652f2e89e11cd57e5d4d77ee166f9f",
+      "wpls_is_t0": false
+    },
+    "v2_INC": {
+      "pair": "0x5b9661276708202dd1a0dd2346a3856b00d3c251",
+      "wpls_is_t0": false
+    },
+    "v2_PRVX": {
+      "pair": "0x62f7d076c92db76cf84223b6309801ea461d7afe",
+      "wpls_is_t0": true
+    },
+    "v2_WETH": {
+      "pair": "0x29d66d5900eb0d629e1e6946195520065a6c5aee",
+      "wpls_is_t0": false
+    },
+    "v2_EHEX": {
+      "pair": "0xf0ea3efe42c11c8819948ec2d3179f4084863d3f",
+      "wpls_is_t0": false
+    },
+    "v2_PDAI": {
+      "pair": "0xae8429918fdbf9a5867e3243697637dc56aa76a1",
+      "wpls_is_t0": false
+    },
+    "v2_WBTC": {
+      "pair": "0x8c52470a05eeb2fce4905688ec59bfdd32e71d07",
+      "wpls_is_t0": true
+    }
+  },
+  "ramps": [
+    {
+      "id": "omnibridge",
+      "name": "PulseChain Bridge (OmniBridge)",
+      "category": "bridge",
+      "color": "#00e1ff",
+      "match": {
+        "mintFromZero": [
+          "0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c",
+          "0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07",
+          "0xefd766ccb38eaf1dfd701853bfce31359239f305",
+          "0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f",
+          "0xb17d901469b9208b17d916112988a3fed19b5ca1",
+          "0x57fde0a71132198bbec939b98976993d8d89d225"
+        ],
+        "txTo": [
+          "0x4fd0aaa7506f3d9cb8274bdb946ec42a1b8751ef",
+          "0x129cb265a5eefff93adb9b6a7a7156f73902ec3f"
+        ]
+      },
+      "outTo": [
+        "0xf868da5a5d5f799cee2205d8fd1f5ad2c4a28499",
+        "0x129cb265a5eefff93adb9b6a7a7156f73902ec3f"
+      ],
+      "valuation": "arrival_market",
+      "fee": {
+        "text": "No PulseChain-side fee; Ethereum gas paid on the other chain (not visible here)"
+      },
+      "accuracy": "high",
+      "verified": true,
+      "sources": [
+        "PulseChain explorer: HomeOmnibridge 0x129cB265\u2026eC3f, WPLSOmnibridgeRouter 0xf868\u20268499 (verified contract names)",
+        "Bridged token list: howtopulse.com/bridged-contract-addresses, 9inch gitbook",
+        "0x4fD0aaa7\u2026 is an EternalStorageProxy created by the same deployer as WPLSOmnibridgeRouter (role inferred: AMB/bridge proxy)"
+      ]
+    },
+    {
+      "id": "hyperlane",
+      "name": "Hyperlane (USDC warp route)",
+      "category": "bridge",
+      "color": "#7f5cff",
+      "match": {
+        "mintFromZero": [
+          "0x2933a799e88ce013adb44389269dc87d0c672d42"
+        ]
+      },
+      "valuation": "arrival_market",
+      "fee": {
+        "text": "Interchain gas fee paid on the source chain (not visible here)"
+      },
+      "accuracy": "high",
+      "verified": true,
+      "sources": [
+        "PulseChain explorer: HypERC20 (USDC) 0x2933A799\u20262d42",
+        "hyperlane-xyz/hyperlane-monorepo commit a572881 'usdc pulsechain warp route'"
+      ]
+    },
+    {
+      "id": "libertyswap",
+      "name": "LibertySwap",
+      "category": "bridge",
+      "color": "#ffb000",
+      "match": {
+        "txTo": [
+          "0xe7ee706a6708b691a232452c9cb267d186942f09",
+          "0x80c2c603d72ea17a0d85b670d4489eb3012035cd",
+          "0x8dc4abf5bc294def5c4bb1d3398528d28f714416",
+          "0xc1fbb3a198917ff62342d2d00407eab56ee4c99a",
+          "0x0e0eddae092176d851d5c70a49b5d83e2510e72f",
+          "0x63f334d054236e51c241e0bf6b095e67448a4366",
+          "0x78f63fe16c83728c16c0ae44b0c19d7dd105c215"
+        ]
+      },
+      "outTo": [
+        "0xe7ee706a6708b691a232452c9cb267d186942f09",
+        "0x80c2c603d72ea17a0d85b670d4489eb3012035cd",
+        "0x8dc4abf5bc294def5c4bb1d3398528d28f714416",
+        "0xc1fbb3a198917ff62342d2d00407eab56ee4c99a",
+        "0x0e0eddae092176d851d5c70a49b5d83e2510e72f",
+        "0x63f334d054236e51c241e0bf6b095e67448a4366",
+        "0x78f63fe16c83728c16c0ae44b0c19d7dd105c215"
+      ],
+      "valuation": "arrival_gross",
+      "feePctIn": 0.3,
+      "feePctOut": 0.5,
+      "fee": {
+        "text": "0.3% inbound, 0.5% outbound (published)"
+      },
+      "accuracy": "high",
+      "verified": true,
+      "verifiedNote": "0xe7EE\u2026, 0x80C2\u2026, 0x8dC4\u2026, 0xC1fB\u2026, 0x0E0e\u2026, 0x63F3\u2026 listed in LibertySwap docs; 0x78f63f\u2026 observed delivering in real user history (same pattern, not in docs)",
+      "sources": [
+        "docs.libertyswap.finance/liberty-swap-2.0/cross-chain-swaps (fees + contract addresses)",
+        "docs.libertyswap.finance/resources/liberty-swap-api"
+      ]
+    },
+    {
+      "id": "coast",
+      "name": "Coast (0xCoast, CST)",
+      "category": "fiat",
+      "color": "#22d3a6",
+      "match": {
+        "mintFromZero": [
+          "0x600136da8cc6d1ea07449514604dc4ab7098db82"
+        ]
+      },
+      "valuation": "arrival_gross_flat",
+      "feePctIn": 0.25,
+      "feeFlatUsd": 3,
+      "fee": {
+        "text": "0.25% mint fee (WAIT-locked tier; 4% standard) + $3 deposit charge (published)"
+      },
+      "accuracy": "high",
+      "verified": true,
+      "sources": [
+        "0xcoast.com/2023/08/cst-is-live-on-pulsechain (CST contract)",
+        "0xcoast.com/archive (fees)",
+        "PulseChain explorer: verified contract 'Coast' (CST)"
+      ]
+    },
+    {
+      "id": "provex",
+      "name": "ProveX (P2P fiat escrow)",
+      "category": "fiat",
+      "color": "#ff4fd8",
+      "match": {
+        "fromContractNameIncludes": [
+          "escrow"
+        ]
+      },
+      "valuation": "arrival_gross",
+      "feePctIn": 1.0,
+      "fee": {
+        "text": "2% protocol fee, 1% paid by the buyer (published). Seller's rate markup is off-chain."
+      },
+      "accuracy": "medium",
+      "verified": false,
+      "verifiedNote": "Escrow address on PulseChain not published; detected by the explorer contract name containing 'Escrow'.",
+      "sources": [
+        "provex.dev / provex.com (fee 1% buyer + 1% seller)"
+      ]
+    },
+    {
+      "id": "custodial",
+      "name": "Swap service payout (SwapToPulse / ChangeNOW-type)",
+      "category": "custodial",
+      "color": "#ff8a3d",
+      "match": {
+        "from": [
+          "0xf697b1090f1e626a8153ff58c76bf220c925472e",
+          "0xb40f1ac813d2d04ada0d7409ce84d5ac2b33be4c",
+          "0xc3fd0be2351726eff3afc1861f1ba4bf719205a1"
+        ]
+      },
+      "valuation": "arrival_market",
+      "flag": "spread_unknown",
+      "fee": {
+        "text": "Spread/markup happens off-chain and is unknown"
+      },
+      "accuracy": "medium",
+      "verified": "observed",
+      "verifiedNote": "High-volume EOA payout wallets (17k\u2013372k txs) observed paying out PLS in real SwapToPulse/ChangeNOW-era purchases. Not publicly labeled by the services.",
+      "sources": [
+        "swaptopulse.com (custodial deposit-address model)",
+        "changenow.io/buy/pulse"
+      ]
+    },
+    {
+      "id": "hotwallet",
+      "name": "Exchange / service hot wallet (likely)",
+      "category": "custodial",
+      "color": "#ffd23f",
+      "match": {
+        "fromEoaMinTxs": 10000
+      },
+      "valuation": "arrival_market_outside",
+      "flag": "spread_unknown",
+      "fee": {
+        "text": "Unknown (off-chain)"
+      },
+      "accuracy": "medium",
+      "verified": "heuristic",
+      "verifiedNote": "Covers CEX withdrawals (MEXC, Gate, Poloniex, BingX, CoinEx, LBank, Bitget\u2026), RampNow / Guardarian / SimpleSwap / PulseChain Ramp-type card ramps and other custodial services: any non-contract sender with 10,000+ transactions. CEX hot wallets on PulseChain are not publicly labeled, so no individual exchange addresses are hard-coded.",
+      "sources": [
+        "PulseChain explorer address counters"
+      ]
+    },
+    {
+      "id": "farm",
+      "name": "PulseX farm rewards (MasterChef)",
+      "category": "income",
+      "color": "#3ddc84",
+      "match": {
+        "from": [
+          "0xb2ca4a66d3e57a5a9a12043b6bad28249fe302d4"
+        ]
+      },
+      "valuation": "zero",
+      "fee": {
+        "text": "\u2014"
+      },
+      "accuracy": "exact",
+      "verified": true,
+      "sources": [
+        "PulseChain explorer: MasterChef 0xB2Ca4A66\u202602d4"
+      ]
+    },
+    {
+      "id": "other",
+      "name": "Other / unknown sender (peer transfer)",
+      "category": "peer",
+      "color": "#8b93a7",
+      "match": {},
+      "valuation": "arrival_market_outside",
+      "fee": {
+        "text": "\u2014"
+      },
+      "accuracy": "medium",
+      "verified": true,
+      "verifiedNote": "Default bucket: anything not matched above is still counted at the market price at the arrival block. Arrivals worth under $1 from unknown senders count as free dust."
+    }
+  ],
+  "venues": [
+    {
+      "id": "pulsex",
+      "name": "PulseX (direct)",
+      "to": [
+        "0x98bf93ebf5c380c0e6ae8e192a7e2ae08edacc02",
+        "0x165c3410fc91ef562c50559f7d2289febed552d9",
+        "0xda9aba4eacf54e0273f56dffee6b8f1e20b23bba"
+      ],
+      "fee": "0.29% LP fee inside the price",
+      "verified": true,
+      "sources": [
+        "PulseChain explorer: PulseXRouter02 v1 (Official tag) / v2, PulseXSwapRouter"
+      ]
+    },
+    {
+      "id": "gopulse",
+      "name": "GoPulse",
+      "to": [
+        "0x607015ec03b0e2300520175a231c03155b8e1a48"
+      ],
+      "feeCollector": [
+        "0x6e9f49cd04eceb3839fc9443974c1b7518df58aa"
+      ],
+      "fee": "Measured on-chain (fee legs to the collector)",
+      "verified": "observed",
+      "sources": [
+        "Observed router + fee collector in real user history; wiki.gopulse.com"
+      ]
+    },
+    {
+      "id": "piteas",
+      "name": "Piteas",
+      "to": [
+        "0x6bf228eb7f8ad948d37ded07e595efddfaaf88a6"
+      ],
+      "fee": "Inside the quoted price (not split out on-chain)",
+      "verified": true,
+      "sources": [
+        "docs.piteas.io/contracts",
+        "github.com/piteasio/piteas-contracts"
+      ]
+    },
+    {
+      "id": "9mm",
+      "name": "9mm",
+      "to": [
+        "0xcc73b59f8d7b7c532703bdfea2808a28a488cf47",
+        "0xa9444246d80d6e3496c9242395213b4f22226a59",
+        "0x7be8fbe502191bbbcb38b02f2d4fa0d628301bea"
+      ],
+      "fee": "LP fee inside the price",
+      "verified": true,
+      "sources": [
+        "github.com/9mm-exchange/deployments (pulsechain/v2.json, v3.json)"
+      ]
+    },
+    {
+      "id": "9inch",
+      "name": "9inch",
+      "to": [
+        "0xeb45a3c4aedd0f47f345fb4c8a1802bb5740d725"
+      ],
+      "fee": "LP fee inside the price",
+      "verified": true,
+      "sources": [
+        "PulseChain explorer: NineInchRouter 0xeB45a3c4\u2026d725"
+      ]
+    },
+    {
+      "id": "zerion",
+      "name": "Zerion router",
+      "to": [
+        "0xb2be281e8b11b47fec825973fc8bb95332022a54"
+      ],
+      "fee": "Up to 1% (contract FEE_LIMIT)",
+      "verified": true,
+      "sources": [
+        "PulseChain explorer: Router 0xB2BE281e\u20262A54 (Zerion source)"
+      ]
+    },
+    {
+      "id": "libertyswap",
+      "name": "LibertySwap (cross-chain buy)",
+      "to": [],
+      "fee": "0.3% in",
+      "verified": true,
+      "sources": []
+    }
+  ],
+  "income": {
+    "masterchef": "0xb2ca4a66d3e57a5a9a12043b6bad28249fe302d4"
+  },
+  "rpc": {
+    "archive": [
+      "https://rpc-pulsechain.g4mm4.io",
+      "https://rpc.pulsechain.com"
+    ],
+    "logs": [
+      "https://rpc.pulsechain.com"
+    ],
+    "logsChunked": [
+      "https://pulsechain-rpc.publicnode.com",
+      "https://rpc-pulsechain.g4mm4.io"
+    ],
+    "scan": "https://api.scan.pulsechain.com/api",
+    "scanV2": "https://api.scan.pulsechain.com/api/v2",
+    "subgraphs": {
+      "v1": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex",
+      "v2": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2"
+    }
+  },
+  "ethereum": {
+    "hex": "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+    "multicall3": "0xca11bde05977b3631167028862be2a173976ca11",
+    "forkBlock": 17233000,
+    "rpc": [
+      "https://ethereum-rpc.publicnode.com",
+      "https://eth.drpc.org",
+      "https://1rpc.io/eth"
+    ],
+    "scan": "https://eth.blockscout.com/api",
+    "scanV2": "https://eth.blockscout.com/api/v2",
+    "prices": "https://coins.llama.fi",
+    "stables": {
+      "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": [
+        "USDC",
+        6
+      ],
+      "0xdac17f958d2ee523a2206206994597c13d831ec7": [
+        "USDT",
+        6
+      ],
+      "0x6b175474e89094c44da98b954eedeac495271d0f": [
+        "DAI",
+        18
+      ]
+    },
+    "weth": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "topics": {
+      "stakeStart": "0x14872dc760f33532684e68e1b6d5fd3f71ba7b07dee76bdb2b084f28b74233ef",
+      "stakeEnd": "0x72d9c5a7ab13846e08d9c838f9e866a1bb4a66a2fd3ba3c9e7da3cf9e394dfd7",
+      "lobbyEnter": "0x25ecdb937d5c5cc78f0d18dfb1ac82c44086b5dc608380ba357d06c9868f0b1d",
+      "lobbyExit": "0xa6b19fa7f41317a186e1d58e9d81f86a52f1102b6bce10b4eca83f37aaa58468"
+    }
+  }
+}
