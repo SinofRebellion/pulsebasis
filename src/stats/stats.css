@@ -1,0 +1,33 @@
+.sd { max-width: 760px; margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 16px 40px; }
+.sd h1 { font-size: 24px; margin: 6px 0 14px; letter-spacing: -.01em; }
+.sd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sd-refresh { font: inherit; font-size: 13px; color: var(--tx2); background: rgba(255,255,255,.05); border: 1px solid var(--line2); padding: 8px 12px; border-radius: 99px; cursor: pointer; }
+.sd-label { display: block; font-size: 13px; color: var(--tx2); font-weight: 600; letter-spacing: .02em; }
+.sd-health { display: flex; gap: 16px; align-items: flex-start; padding: 20px; margin-bottom: 14px; }
+.sd-health b { display: block; font-size: 26px; margin: 4px 0 6px; line-height: 1.15; }
+.sd-health p { margin: 0; font-size: 15.5px; line-height: 1.45; }
+.sd-health .sd-tip { margin-top: 10px; color: var(--tx2); font-size: 14px; }
+.sd-light { flex: none; width: 18px; height: 18px; margin-top: 4px; border-radius: 50%; background: var(--lc); box-shadow: 0 0 18px var(--lc), 0 0 40px var(--lc); }
+.sd-green { --lc: #2fe08a; border-color: color-mix(in srgb, #2fe08a 45%, transparent) !important; }
+.sd-yellow { --lc: #ffc93a; border-color: color-mix(in srgb, #ffc93a 55%, transparent) !important; }
+.sd-red { --lc: #ff4d5e; border-color: color-mix(in srgb, #ff4d5e 60%, transparent) !important; background: color-mix(in srgb, #ff4d5e 8%, var(--card)) !important; }
+.sd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+@media (min-width: 640px) { .sd-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sd-num { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; min-width: 0; }
+.sd-num b { display: block; font-size: 30px; margin: 6px 0 4px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.sd-num p { margin: 0; font-size: 12.5px; color: var(--tx2); line-height: 1.35; }
+.sd .card + .card { margin-top: 14px; }
+.sd-bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.sd-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11.5px; color: var(--tx2); }
+.sd-day em { font-style: normal; font-variant-numeric: tabular-nums; }
+.sd-col { height: 110px; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.sd-col i { width: 28%; border-radius: 4px 4px 0 0; min-height: 2px; }
+.sd-col .v { background: #ff3d9a; } .sd-col .s { background: #a259ff; } .sd-col .f { background: #ff4d5e; }
+.sd-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.sd-list li { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 12px; background: rgba(255,255,255,.035); font-size: 15px; }
+.sd-list em { margin-left: auto; font-style: normal; color: var(--tx2); font-size: 14px; }
+.sd-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--lc); box-shadow: 0 0 10px var(--lc); flex: none; }
+.sd-key { display: grid; gap: 10px; max-width: 420px; }
+.sd-key input { font: inherit; font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); color: var(--tx); }
+.sd-foot { margin-top: 18px; text-align: center; }
+.dot-green { --lc: #2fe08a; } .dot-yellow { --lc: #ffc93a; } .dot-red { --lc: #ff4d5e; }
