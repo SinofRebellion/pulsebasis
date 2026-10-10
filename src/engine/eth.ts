@@ -4,7 +4,7 @@
 // read, the PulseChain report is unaffected and the section says so.
 import REG from './registry.json';
 import type { KV } from './cache';
-import { rpc, getJSON } from './net';
+import { rpc, getJSON, benched } from './net';
 import { SEL, ZERO, pad32, u, words, encodeTryAggregate, decodeTryAggregate, chunk, pool, lc, toFloat, type Call } from './util';
 
 const X: any = (REG as any).ethereum;
@@ -12,6 +12,45 @@ const HEX = X.hex as string;
 const M72 = (1n << 72n) - 1n;
 const L0 = Date.UTC(2019, 11, 3) / 1000;
 const ownT = (a: string) => '0x' + pad32(a);
+const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+/** Etherscan-style log APIs in failover order (Blockscout, then keyless Routescan). Healthy hosts first. */
+const scanBases = () => { const all = [X.scan, ...(X.scanFallback ?? [])] as string[]; return [...all.filter(u => !benched(u)), ...all.filter(u => benched(u))]; };
+/** Set when Ethereum history had to come from a fallback source or could not be fully read. */
+export const ethReadState = { fallbackUsed: false, incomplete: false };
+async function scanLogs(qs: string): Promise<any[]> {
+  let last: any;
+  for (const base of scanBases()) {
+    try {
+      const j = await getJSON(`${base}?${qs}`, 3);
+      if (Array.isArray(j?.result)) { if (base !== X.scan) ethReadState.fallbackUsed = true; return j.result; }
+      if (j?.status === '0' && /no (records|logs)/i.test(String(j?.message))) { if (base !== X.scan) ethReadState.fallbackUsed = true; return []; }
+      last = new Error('bad answer from ' + base);
+    } catch (e) { last = e; }
+  }
+  throw last ?? new Error('Ethereum explorer did not answer');
+}
+/** Paged getLogs (1000 per answer), inclusive re-read of the last block, deduped by tx:logIndex. */
+async function logsPaged(filter: string, from: number): Promise<any[]> {
+  const out = new Map<string, any>(); let max = from;
+  for (let g = 0; g < 200; g++) {
+    const res = await scanLogs(`module=logs&action=getLogs&address=${HEX}&fromBlock=${from}&toBlock=latest&${filter}`);
+    for (const l of res) { const b = parseInt(l.blockNumber, 16); max = Math.max(max, b); out.set(lc(l.transactionHash) + ':' + parseInt(l.logIndex, 16), l); }
+    if (res.length < 1000) break;
+    from = max;
+  }
+  return [...out.values()];
+}
+/** Fallback for HEX transfers when the Blockscout v2 API fails: Transfer logs where the wallet is sender or receiver. */
+async function transfersViaLogs(a: string): Promise<EthTransfer[]> {
+  const [outL, inL] = await Promise.all([logsPaged(`topic0=${TRANSFER}&topic1=${ownT(a)}&topic0_1_opr=and`, 0), logsPaged(`topic0=${TRANSFER}&topic2=${ownT(a)}&topic0_2_opr=and`, 0)]);
+  const m = new Map<string, EthTransfer>();
+  for (const l of [...outL, ...inL]) {
+    const t: EthTransfer = { b: parseInt(l.blockNumber, 16), li: parseInt(l.logIndex, 16) || 0, ts: parseInt(l.timeStamp, 16), tx: lc(l.transactionHash), from: '0x' + l.topics[1].slice(26), to: '0x' + l.topics[2].slice(26), v: BigInt(l.data).toString() };
+    m.set(t.tx + ':' + t.li, t);
+  }
+  ethReadState.fallbackUsed = true;
+  return [...m.values()];
+}
 
 export interface EthTransfer { b: number; li: number; ts: number; tx: string; from: string; to: string; v: string }
 export interface EthLog { b: number; li: number; ts: number; tx: string; topics: string[]; data: string }
@@ -52,8 +91,10 @@ async function transfersOf(kv: KV, a: string): Promise<EthTransfer[]> {
   const have = new Map((c?.items ?? []).map(t => [t.tx + ':' + t.li, t])); const max = c?.max ?? -1;
   let q = ''; let newMax = max;
   for (let page = 0; page < 400; page++) {
-    const d = await getJSON(`${X.scanV2}/addresses/${a}/token-transfers?type=ERC-20&token=${HEX}${q}`);
-    const items: any[] = Array.isArray(d?.items) ? d.items : []; let stop = false;
+    // A failed or malformed page must never be cached as "complete": fall back to the log APIs for the full history.
+    const d = await getJSON(`${X.scanV2}/addresses/${a}/token-transfers?type=ERC-20&token=${HEX}${q}`).catch(() => null);
+    if (!Array.isArray(d?.items)) { const items = await transfersViaLogs(a); await kv.set(key, { items, max: Math.max(0, ...items.map(t => t.b)) }); return items; }
+    const items: any[] = d.items; let stop = false;
     for (const x of items) {
       const b = Number(x.block_number); if (b <= max) { stop = true; continue; }
       newMax = Math.max(newMax, b);
@@ -71,9 +112,7 @@ async function logsOf(kv: KV, a: string, topic: string): Promise<EthLog[]> {
   const key = `eth:lg:${topic.slice(0, 10)}:${a}`; const c = await kv.get<{ items: EthLog[]; max: number }>(key);
   const have = new Map((c?.items ?? []).map(l => [l.tx + ':' + l.li, l])); let from = (c?.max ?? 0) + 1; let max = c?.max ?? 0;
   for (let g = 0; g < 200; g++) {
-    const j = await getJSON(`${X.scan}?module=logs&action=getLogs&address=${HEX}&fromBlock=${from}&toBlock=latest&topic0=${topic}&topic1=${ownT(a)}&topic0_1_opr=and`);
-    const res: any[] = Array.isArray(j?.result) ? j.result : [];
-    if (!Array.isArray(j?.result) && !(j?.status === '0' && /no (records|logs)/i.test(String(j?.message)))) throw new Error('Ethereum explorer did not answer');
+    const res = await scanLogs(`module=logs&action=getLogs&address=${HEX}&fromBlock=${from}&toBlock=latest&topic0=${topic}&topic1=${ownT(a)}&topic0_1_opr=and`);
     for (const l of res) { const b = parseInt(l.blockNumber, 16); max = Math.max(max, b); have.set(lc(l.transactionHash) + ':' + parseInt(l.logIndex, 16), { b, li: parseInt(l.logIndex, 16) || 0, ts: parseInt(l.timeStamp, 16), tx: lc(l.transactionHash), topics: (l.topics || []).filter((t: any) => t), data: l.data }); }
     if (res.length < 1000) break;
     from = max;   // inclusive re-read of the last block, deduped above
@@ -100,6 +139,7 @@ export async function pricesAt(kv: KV, coin: string, tss: number[]): Promise<Rec
 export const hourOf = (ts: number) => Math.floor(ts / 3600) * 3600;
 
 export async function collectEth(addrs: string[], kv: KV, P: (detail: string) => void): Promise<EthRaw> {
+  ethReadState.fallbackUsed = false; ethReadState.incomplete = false;
   const own = new Set(addrs);
   P('Reading HEX on Ethereum…');
   // current state: balances, stakes, day

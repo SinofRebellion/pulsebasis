@@ -3,7 +3,7 @@
 // report says the cost couldn't be read and the manual entry still works.
 import REG from './registry.json';
 import type { KV } from './cache';
-import { rpc, getJSON } from './net';
+import { rpc, getJSON, benched } from './net';
 import { lc, toFloat, pool } from './util';
 import { pricesAt, hourOf } from './eth';
 
@@ -17,18 +17,53 @@ export interface SacTx { coin: SacCoin; ts: number; tx: string; from: string; to
 export interface SacFound { status: 'ok' | 'error'; txs: SacTx[]; usd: Record<SacCoin, number>; unpriced: number; ethAtFork: number | null }
 
 const BY_ADDR = new Map(SAC_LIST.map(s => [s.address, s]));
+const sleepJ = (ms: number) => new Promise(r => setTimeout(r, ms + Math.random() * 1000));
+/** One page from an Etherscan-style API; a "busy"/malformed answer throws so the caller can back off or switch. */
+async function page1(base: string, qs: string, empty: RegExp): Promise<any[]> {
+  const j = await getJSON(`${base}?${qs}`, 2);
+  if (Array.isArray(j?.result)) return j.result;
+  if (empty.test(String(j?.message ?? ''))) return [];
+  throw new Error('explorer busy');
+}
+/** txlist/tokentx with patient backoff. Blockscout first; plain transactions can also come from Routescan
+ *  (identical results). Routescan's token-transfer index is incomplete, so tokens fall back to Transfer logs. */
 async function scanAll(action: 'txlist' | 'tokentx', a: string, b0: number, b1: number): Promise<any[]> {
-  const out: any[] = [];
-  for (let page = 1; page <= 10; page++) {
-    // the Ethereum explorer rate-limits busy browsers (HTTP 429): back off patiently instead of giving up
-    const url = `${X.scan}?module=account&action=${action}&address=${a}&startblock=${b0}&endblock=${b1}&page=${page}&offset=1000&sort=asc`;
-    let j: any = null;
-    for (let k = 0; ; k++) { try { j = await getJSON(url, 3); break; } catch (e) { if (k >= 5) throw e; await new Promise(r => setTimeout(r, [2000, 4000, 8000, 12000, 20000][k] + Math.random() * 1000)); } }
-    const r = Array.isArray(j?.result) ? j.result : [];
-    if (!Array.isArray(j?.result) && !/no (transactions|token transfers) found/i.test(String(j?.message ?? ''))) throw new Error('explorer');
-    out.push(...r); if (r.length < 1000) break;
+  const bases = [X.scan, ...(action === 'txlist' ? (X.scanFallback ?? []) : [])] as string[];
+  const empty = /no (transactions|token transfers) found/i;
+  for (let k = 0; k < 4; k++) {
+    const order = [...bases.filter(b => !benched(b)), ...bases.filter(b => benched(b))];
+    for (const base of order) {
+      try {
+        const out: any[] = [];
+        for (let page = 1; page <= 10; page++) {
+          const r = await page1(base, `module=account&action=${action}&address=${a}&startblock=${b0}&endblock=${b1}&page=${page}&offset=1000&sort=asc`, empty);
+          out.push(...r); if (r.length < 1000) break;
+        }
+        return out;
+      } catch { /* try the next source */ }
+    }
+    if (action === 'tokentx' && k >= 1 && (X.scanFallback ?? []).length) { const v = await tokentxViaLogs(a, b0, b1).catch(() => null); if (v) return v; }
+    await sleepJ([2000, 5000, 10000, 15000][k]);
   }
-  return out;
+  throw new Error('explorer busy');
+}
+/** Token sends from this wallet to each sacrifice address, from Transfer logs (any token), shaped like tokentx rows. */
+async function tokentxViaLogs(a: string, b0: number, b1: number): Promise<any[]> {
+  const T = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'; const pad = (x: string) => '0x' + x.slice(2).padStart(64, '0');
+  const rows: any[] = [];
+  for (const s of SAC_LIST) {
+    const base = (X.scanFallback as string[])[0];
+    const r = await page1(base, `module=logs&action=getLogs&fromBlock=${Math.max(b0, s.ethBlocks[0])}&toBlock=${Math.min(b1, s.ethBlocks[1])}&topic0=${T}&topic1=${pad(a)}&topic2=${pad(s.address)}&topic0_1_opr=and&topic1_2_opr=and&topic0_2_opr=and`, /no (records|logs)/i);
+    for (const l of r) if ((l.topics || []).length === 3) rows.push({ blockNumber: String(parseInt(l.blockNumber, 16)), timeStamp: String(parseInt(l.timeStamp, 16)), hash: lc(l.transactionHash), from: a, to: s.address, contractAddress: lc(l.address), value: BigInt(l.data && l.data !== '0x' ? l.data : '0x0').toString() });
+  }
+  // symbol + decimals for each token (one call each, current state)
+  const toks = [...new Set(rows.map(r => r.contractAddress))]; const meta: Record<string, [string, number]> = {};
+  await pool(toks, 3, async t => {
+    const d = await rpc('eth_call', [{ to: t, data: '0x313ce567' }, 'latest'], { endpoints: X.rpc, tries: 4, timeoutMs: 20000 }).catch(() => null);
+    meta[t] = [X.stables[t]?.[0] ?? '?', d && d !== '0x' ? Number(BigInt(d)) : (X.stables[t]?.[1] ?? 18)];
+  });
+  for (const r of rows) { r.tokenSymbol = meta[r.contractAddress][0]; r.tokenDecimal = String(meta[r.contractAddress][1]); }
+  return rows;
 }
 
 /** Sacrifice transfers sent by these wallets on Ethereum (cached forever: the windows are closed). */

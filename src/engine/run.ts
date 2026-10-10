@@ -3,7 +3,7 @@ import { collect, senderInfo, verifyStatuses, type Progress, type Raw } from './
 import { buildLedger, Prices, replay as replay0 } from './replay';
 import { analyze } from './analyze';
 import { stats } from './net';
-import { collectEth, analyzeEth, type EthReport } from './eth';
+import { collectEth, analyzeEth, ethReadState, type EthReport } from './eth';
 import { collectSacrifices, SAC_COINS, type SacFound, type SacCoin } from './sacrifice';
 import type { Prices as PricesT, Tx } from './replay';
 
@@ -60,6 +60,11 @@ export async function runAll(addrs: string[], kv: KV, progress: Progress, rawOve
   progress({ phase: 'Finishing', detail: 'Reading HEX on Ethereum…', pct: 99 });
   rep.eth = await ethP;
   if (rep.eth.status === 'ok') { rep.accuracy.recon.push(...rep.eth.recon); rep.accuracy.allOk = rep.accuracy.recon.every(r => r.ok); }
+  // Never let a failed Ethereum read look like a low cost basis: say so loudly.
+  const ethBad = rep.eth.status === 'error' || (rep.eth.status === 'ok' && (!rep.eth.allOk || rep.eth.capped > 0));
+  (rep as any).ethWarning = ethBad ? "We couldn't fully read your Ethereum history right now, so HEX bought on Ethereum before the May 2023 fork may be missing from the Ethereum section. Your PulseChain numbers are unaffected. Try again in a few minutes." : null;
+  if (ethBad) rep.accuracy.gaps.unshift({ level: 'warn', text: (rep as any).ethWarning });
+  else if (ethReadState.fallbackUsed) rep.accuracy.gaps.push({ level: 'info', text: 'The main Ethereum explorer was failing, so Ethereum history was read from a backup explorer (Routescan).' });
   progress({ phase: 'Done', detail: '', pct: 100 });
   return { report: rep, ms: Date.now() - t0, timings: raw.timings, requests: stats.requests, replay: E };
 }

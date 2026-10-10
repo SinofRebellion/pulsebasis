@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { IDBKV } from './engine/cache';
 import { runAll } from './engine/run';
-import { stats, resetStats } from './engine/net';
+import { stats, resetStats, isBusy } from './engine/net';
 
 const kv = new IDBKV();
 self.onmessage = async (e: MessageEvent) => {
@@ -17,7 +17,7 @@ self.onmessage = async (e: MessageEvent) => {
     for (let attempt = 0; ; attempt++) {
       try { r = await runAll(addrs, kv, prog, undefined, manual || {}); break; }
       catch (e: any) {
-        if (attempt >= 3) throw e;
+        if (attempt >= 3 || (isBusy(e) && attempt >= 1)) throw e;   // every call already retried patiently; don't keep the visitor waiting
         attempts++;
         console.warn('PulseBasis: run attempt', attempt + 1, 'failed, resuming:', String(e?.message || e).slice(0, 300));
         prog({ phase: 'Retrying', detail: 'A public server hiccuped. Resuming from what is already saved…', pct: 50 });
@@ -27,6 +27,8 @@ self.onmessage = async (e: MessageEvent) => {
     (self as any).postMessage({ type: 'done', report: r.report, ms: r.ms, timings: r.timings, requests: r.requests, health: health(true, repeat) });
     kv.set(runKey, Date.now()).catch(() => {});
   } catch (err: any) {
-    (self as any).postMessage({ type: 'error', message: String(err?.message || err), health: health(false, repeat) });
+    // Raw server/RPC text is never shown to the visitor (it goes to the console only).
+    console.warn('PulseBasis: run failed:', String(err?.message || err).slice(0, 300));
+    (self as any).postMessage({ type: 'error', kind: isBusy(err) ? 'busy' : 'other', message: '', health: health(false, repeat) });
   }
 };
