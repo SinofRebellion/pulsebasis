@@ -73,13 +73,15 @@ button { font: inherit; color: inherit; }
 .form-card { margin-top: 26px; text-align: left; }
 .form-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; } .form-head span { color: var(--tx3); font-size: 13px; }
 .wrow { display: grid; grid-template-columns: 1fr 180px 40px; gap: 8px; margin-bottom: 8px; }
+.addr-warn { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: #ffc861; background: rgba(255,200,97,.08); border: 1px solid rgba(255,200,97,.3); border-radius: 10px; padding: 7px 10px; }
+.wrow.has-warn .addr { border-color: rgba(255,200,97,.6); }
 input { font: inherit; color: var(--tx); background: rgba(0,0,0,.35); border: 1px solid var(--line2); border-radius: 12px; padding: 12px 13px; min-width: 0; outline: none; transition: border-color .15s, box-shadow .15s; font-size: 16px; }
 input.addr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14.5px; }
 input:focus { border-color: #ff4fa8; box-shadow: 0 0 0 3px rgba(255, 15, 111, .2); }
 input.bad { border-color: var(--neg); }
 .icon-btn { border: 1px solid var(--line2); background: rgba(255,255,255,.03); border-radius: 12px; cursor: pointer; color: var(--tx3); }
 .icon-btn:hover { color: var(--tx); }
-@media (max-width: 600px) { .wrow { grid-template-columns: 1fr 40px; } .wrow .label { grid-column: 1; grid-row: 2; } .wrow .icon-btn { grid-row: 1 / span 2; grid-column: 2; } .wrow { padding-bottom: 8px; border-bottom: 1px dashed var(--line); } }
+@media (max-width: 600px) { .wrow { grid-template-columns: 1fr 40px; } .wrow .label { grid-column: 1; grid-row: 2; } .wrow .icon-btn { grid-row: 1 / span 2; grid-column: 2; } .wrow .addr-warn { grid-row: 3; } .wrow { padding-bottom: 8px; border-bottom: 1px dashed var(--line); } }
 .form-actions { display: flex; gap: 10px; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; }
 .btn { border: 0; border-radius: 13px; padding: 12px 18px; font-weight: 650; cursor: pointer; font-size: 15px; transition: transform .1s, filter .15s, opacity .15s; }
 .btn:active { transform: scale(.98); }
@@ -87,6 +89,10 @@ input.bad { border-color: var(--neg); }
 .btn.primary:hover { filter: brightness(1.08); } .btn.primary:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 .btn.ghost { background: rgba(255,255,255,.05); border: 1px solid var(--line2); color: var(--tx); }
 .privacy { margin: 14px 0 0; font-size: 12.5px; color: var(--tx3); }
+.privacy + .privacy { margin-top: 6px; }
+.linkbtn { font: inherit; font-weight: 700; color: var(--tx); background: none; border: 0; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.linkbtn:disabled { opacity: .5; cursor: default; }
+.privacy.cleared { color: #3ddc97; }
 
 /* progress */
 .progress-card { margin-top: 14px; text-align: left; }
@@ -262,3 +268,38 @@ input.bad { border-color: var(--neg); }
 .hero-coins { display: inline-flex; gap: 4px; margin-right: 6px; vertical-align: middle; }
 .hero-coins .coin-ico + .coin-ico { margin-left: -7px; }
 @media print { .coin-ico { filter: none !important; } }
+
+/* other chains (eHEX / Ethereum HEX) */
+.oc { margin-top: 14px; }
+.oc-grid { margin-top: 12px; }
+.oc-msg { margin: 10px 0 0; color: var(--tx2); }
+.oc-fork { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(91,140,255,.08); border: 1px solid rgba(91,140,255,.25); font-size: 13.5px; line-height: 1.45; }
+.oc-total { margin: 12px 0 0; font-size: 14px; }
+.oc-stakes { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+
+/* what if I buy now? */
+.bn { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.bn-toggle { font: inherit; font-size: 13.5px; font-weight: 700; color: var(--tx); background: none; border: 0; padding: 6px 0; cursor: pointer; }
+.bn-body { display: grid; gap: 8px; }
+.bn-label { font-size: 12.5px; color: var(--tx2); font-weight: 600; }
+.bn-amt { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line2); background: var(--card2); border-radius: 12px; padding: 0 12px; }
+.bn-amt span { color: var(--tx2); font-weight: 700; }
+.bn-amt input { flex: 1; min-width: 0; font: inherit; font-size: 18px; font-weight: 700; padding: 11px 0; background: none; border: 0; color: var(--tx); outline: none; }
+.bn-amt:focus-within { border-color: var(--c, #ff3d9a); }
+.bn-chips, .bn-coins { display: flex; flex-wrap: wrap; gap: 6px; }
+.bn-chips button, .bn-coins button { font: inherit; font-size: 13px; font-weight: 700; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--line2); background: var(--card2); color: var(--tx2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.bn-chips button.on, .bn-coins button.on { color: var(--tx); border-color: var(--c, #ff3d9a); background: color-mix(in srgb, var(--c, #ff3d9a) 16%, transparent); }
+.bn-fee { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tx2); }
+.bn-fee select, .bn-fee input { font: inherit; font-size: 16px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--tx); }
+.bn-fee input { width: 70px; }
+.bn-got { margin: 4px 0 0; font-size: 14px; }
+.bn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bn-grid > div { background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; min-width: 0; }
+.bn-grid span { display: block; font-size: 11.5px; color: var(--tx2); }
+.bn-grid b { display: block; font-size: 14px; margin: 3px 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bn-grid b s { color: var(--tx3); font-weight: 600; } .bn-grid b em { font-style: normal; }
+.bn-grid small { display: block; font-size: 11.5px; color: var(--tx2); line-height: 1.3; }
+.bn-note { margin: 0; font-size: 11.5px; color: var(--tx3); }
+.bn-overall { margin-top: 14px; display: grid; gap: 8px; }
+@media (max-width: 420px) { .bn-grid { grid-template-columns: minmax(0, 1fr); } }
+@media print { .bn, .bn-overall { display: none !important; } }
