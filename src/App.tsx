@@ -6,6 +6,8 @@ import { Position, CostSection, StakesSection, MoneySection, AccuracySection, Se
 import { QUOTES, TIPS } from './quotes';
 import { short } from './format';
 import { TipJar } from './ui/tip';
+import { OtherChains } from './ui/otherchains';
+import { checksumState } from './checksum';
 
 type Wallet = { address: string; label: string };
 type Prog = { phase: string; detail: string; pct: number };
@@ -23,7 +25,7 @@ export default function App() {
   const [t0, setT0] = useState(0); const [, tick] = useState(0);
   const worker = useRef<Worker | null>(null);
   useEffect(() => { if (status !== 'running') return; const i = setInterval(() => tick(x => x + 1), 500); return () => clearInterval(i); }, [status]);
-  useEffect(() => { localStorage.setItem(LS, JSON.stringify(wallets.filter(w => w.address || w.label))); }, [wallets]);
+  useEffect(() => { const w = wallets.filter(w => w.address || w.label); if (w.length) localStorage.setItem(LS, JSON.stringify(w)); else localStorage.removeItem(LS); }, [wallets]);
 
   const valid = wallets.filter(w => isAddr(w.address));
   const labels = useMemo(() => Object.fromEntries(valid.map((w, i) => [w.address.toLowerCase(), w.label || `Wallet ${i + 1}`])), [wallets]);
@@ -41,7 +43,15 @@ export default function App() {
     wk.onerror = e => { setErr(e.message || 'Worker failed'); setStatus('error'); };
     wk.postMessage({ type: 'run', addrs: valid.map(w => w.address.trim().toLowerCase()) });
   };
-  const clearCache = () => { const wk = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }); wk.onmessage = () => { wk.terminate(); alert('Local cache cleared.'); }; wk.postMessage({ type: 'clear' }); };
+  const [cleared, setCleared] = useState('');
+  const clearCache = () => {
+    if (status === 'running') return;
+    const wk = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    const done = () => { wk.terminate(); try { localStorage.removeItem(LS); sessionStorage.clear(); } catch {}
+      setWallets([{ address: '', label: '' }]); setReport(null); setRunInfo(null); setStatus('idle'); (window as any).__PB = undefined;
+      setCleared('Done. Your saved addresses and results were deleted from this device.'); };
+    wk.onmessage = done; wk.onerror = done; wk.postMessage({ type: 'clear' });
+  };
   const setW = (i: number, p: Partial<Wallet>) => setWallets(ws => ws.map((w, k) => k === i ? { ...w, ...p } : w));
   const onPaste = (i: number, text: string) => {
     const found = text.match(/0x[0-9a-fA-F]{40}/g);
@@ -71,18 +81,22 @@ export default function App() {
           <div className="form-head"><b>Your wallets</b><span>Treated as one person. Moves between them aren't buys or sells.</span></div>
           {wallets.map((w, i) => {
             const bad = w.address.trim() && !isAddr(w.address);
-            return <div className="wrow" key={i}>
+            const ckBad = !bad && isAddr(w.address) && checksumState(w.address) === 'bad';
+            return <div className={'wrow' + (ckBad ? ' has-warn' : '')} key={i}>
               <input className={'addr' + (bad ? ' bad' : '')} placeholder="0x… address" value={w.address} spellCheck={false} autoCapitalize="off" autoCorrect="off" inputMode="text"
                 onChange={e => setW(i, { address: e.target.value.trim() })} onPaste={e => { if (onPaste(i, e.clipboardData.getData('text'))) e.preventDefault(); }} aria-label={`Wallet ${i + 1} address`} />
               <input className="label" placeholder={`Label (optional)`} value={w.label} onChange={e => setW(i, { label: e.target.value })} aria-label={`Wallet ${i + 1} label`} />
               <button className="icon-btn" onClick={() => setWallets(ws => ws.length > 1 ? ws.filter((_, k) => k !== i) : [{ address: '', label: '' }])} aria-label="Remove wallet">✕</button>
+              {ckBad && <p className="addr-warn" role="alert" data-testid="checksum-warn">The capital letters in this address don't match its checksum, so a character may have been mistyped. Double-check it against your wallet app. You can still analyze it.</p>}
             </div>;
           })}
           <div className="form-actions">
             <button className="btn ghost" onClick={() => setWallets(ws => [...ws, { address: '', label: '' }])}>+ Add wallet</button>
-            <button className="btn primary" disabled={!valid.length || status === 'running'} onClick={run} data-testid="run">{status === 'running' ? 'Working…' : report ? 'Run again' : `Analyze ${valid.length || ''} wallet${valid.length === 1 ? '' : 's'}`}</button>
+            <button className="btn primary" disabled={!valid.length || status === 'running'} onClick={() => { setCleared(''); run(); }} data-testid="run">{status === 'running' ? 'Working…' : report ? 'Run again' : `Analyze ${valid.length || ''} wallet${valid.length === 1 ? '' : 's'}`}</button>
           </div>
-          <p className="privacy"><Lock /> Addresses never leave your browser except to public blockchain APIs (PulseChain RPC, PulseChain explorer, PulseX subgraph). Your addresses and results are never stored on any server; we only count anonymous visits and how long scans take. No wallet connection.</p>
+          <p className="privacy"><Lock /> No wallet connection. Your addresses go only to the public blockchain servers that are read (PulseChain and Ethereum servers, their explorers and price lookups). They are never sent to or stored on our server; we only count anonymous visits and how long scans take.</p>
+          <p className="privacy" data-testid="local-cache-note">To make rescans fast, your addresses and results are saved only on this device, in your browser's storage (localStorage and IndexedDB). <button type="button" className="linkbtn" data-testid="clear-data" onClick={clearCache} disabled={status === 'running'}>Clear my saved data</button></p>
+          {cleared && <p className="privacy cleared" role="status" data-testid="cleared">{cleared}</p>}
         </div>
         <TipJar />
         {status === 'running' && <div className="card progress-card" data-testid="progress">
@@ -99,8 +113,8 @@ export default function App() {
 
       {report && report.accuracy.txs === 0 && <main className="report" data-testid="report-empty"><section className="sec" id="position"><div className="card story">
         <div className="card-title">No PulseChain activity found</div>
-        <p>These wallets have no transactions on PulseChain since the May 2023 launch, and no HEX, PLS, PLSX, INC or PRVX right now. Double-check that you pasted the address you actually use on PulseChain (the same 0x address works on Ethereum, Base and others, but only PulseChain activity is read).</p>
-      </div></section></main>}
+        <p>These wallets have no transactions on PulseChain since the May 2023 launch, and no HEX, PLS, PLSX, INC or PRVX right now. Double-check that you pasted the address you actually use on PulseChain (the same 0x address works on Ethereum, Base and others; we read PulseChain, plus HEX on Ethereum).</p>
+      </div>{report.eth?.status === 'ok' && report.eth.any && <OtherChains r={report} />}</section></main>}
       {report && report.accuracy.txs > 0 && <main className="report" data-testid="report">
         <Position r={report} labels={labels} />
         <CostSection r={report} />

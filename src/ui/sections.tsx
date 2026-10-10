@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Report } from '../engine/analyze';
 import { CoinIcon } from './coin';
+import { OtherChains } from './otherchains';
+import { BuyNow, BuyNowOverall } from './buynow';
 import { usd, price, qty, qtyFull, pct, short, isoDate, monthFmt, dateFmt, COIN_COLORS, COIN_NAMES } from '../format';
 import { Donut, BuyChart, Bars, AreaChart } from './charts';
 
@@ -56,6 +58,7 @@ export function Position({ r, labels }: { r: Report; labels: Record<string, stri
             <div className="split-legend"><span><i style={{ background: '#ffb020' }} />Liquid {qtyFull(X.liquid)}</span><span><i style={{ background: '#ff3d9a' }} />Staked {qtyFull(X.principal)}</span><span><i style={{ background: '#a259ff' }} />Interest {qtyFull(X.accrued)}</span></div>
           </div>}
           <p className="coin-explain">{c === 'HEX' ? `Average cost includes the free interest. Without it: ${price(X.avg_ex_accr)}.` : p.rise > 0 ? `${c} has to reach ${price(p.avg)} for these coins to be worth what they cost.` : `Above your average cost: every ${c} is worth more than you paid on average.`}</p>
+          <BuyNow coin={c} qty={p.qty} cost={p.cost} now={p.now} freeQty={c === 'HEX' ? X.accrued : 0} />
         </div>;
       })}
       <div className="card alloc">
@@ -64,6 +67,8 @@ export function Position({ r, labels }: { r: Report; labels: Record<string, stri
         <ul className="legend">{order.map(c => <li key={c}><i style={{ background: COIN_COLORS[c] }} /><CoinIcon coin={c} size={18} />{c}<b>{r.percoin[c].share.toFixed(1)}%</b></li>)}</ul>
       </div>
     </div>
+    {!empty && <BuyNowOverall coins={order.filter(c => r.percoin[c].now > 0).map(c => ({ c, qty: r.percoin[c].qty, cost: r.percoin[c].cost, now: r.percoin[c].now }))} tot={T} />}
+    <OtherChains r={r} />
   </Sec>;
 }
 function SplitBar({ parts }: { parts: { v: number; c: string; l: string }[] }) {
@@ -261,7 +266,7 @@ export function AccuracySection({ r, runInfo, wallets, onClear }: { r: Report; r
     </div>
     <div className="card actions-card">
       <div className="card-title">Take it with you</div>
-      <div className="btns"><button className="btn primary" onClick={csv} data-testid="csv">Download lots (CSV)</button><button className="btn ghost" onClick={() => window.print()}>Print / save as PDF</button><button className="btn ghost" onClick={onClear}>Clear local cache</button></div>
+      <div className="btns"><button className="btn primary" onClick={csv} data-testid="csv">Download lots (CSV)</button><button className="btn ghost" onClick={() => window.print()}>Print / save as PDF</button><button className="btn ghost" onClick={onClear}>Clear my saved data</button></div>
       <p className="muted small">Wallets analyzed: {wallets.map(w => `${w.label} (${short(w.address)})`).join(', ')}</p>
     </div>
   </Sec>;
