@@ -1,0 +1,42 @@
+{
+ "public/og-image.png": {
+  "b64": "binary/public__og-image.png.b64",
+  "sha256": "fc2dd473449f0ddebcd0aeecafd04ecac6ac694973dcf4c7bf885f7f9b939428",
+  "bytes": 203995
+ },
+ "public/coins/hex.png": {
+  "b64": "binary/public__coins__hex.png.b64",
+  "sha256": "0dd7f432cd2a2456cd1f208b7d4af6a75e27f341874e4b6b5792b2c87181ae99",
+  "bytes": 17321
+ },
+ "public/coins/ehex.png": {
+  "b64": "binary/public__coins__ehex.png.b64",
+  "sha256": "1f38d3d90021356d9c9e1ff91fb8831c969a3f3784988b901d609c807cbcf49c",
+  "bytes": 15525
+ },
+ "public/coins/pls.png": {
+  "b64": "binary/public__coins__pls.png.b64",
+  "sha256": "0765facd2f2bf903d277f631ee93982594d5212cd3353d4afebc33a1271a97ad",
+  "bytes": 32964
+ },
+ "public/coins/plsx.png": {
+  "b64": "binary/public__coins__plsx.png.b64",
+  "sha256": "d936a0bcd3813657dc32297b4c61f38741192b992621049cf90c35ec59e520fd",
+  "bytes": 9304
+ },
+ "public/coins/inc.png": {
+  "b64": "binary/public__coins__inc.png.b64",
+  "sha256": "6e725816dee025b0664baeceb299f0273a763f64e62af4a2c821e143ce5c70b3",
+  "bytes": 7975
+ },
+ "public/coins/prvx.png": {
+  "b64": "binary/public__coins__prvx.png.b64",
+  "sha256": "601afb7452fc9d65bc06b6f059a732bda4a4fa7a4b7243a92c879e16214f4091",
+  "bytes": 28819
+ },
+ "proof/STATEMENT.txt.ots": {
+  "b64": "binary/proof__STATEMENT.txt.ots.b64",
+  "sha256": "2bea1417377e23b0c1cf559a87335517968448bb56818ff04cbadaaea261fae1",
+  "bytes": 700
+ }
+}
