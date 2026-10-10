@@ -17,6 +17,24 @@ export const stats = { requests: 0, errors: 0, retries: 0, rateHits: 0, rangeHit
 export function resetStats() { Object.assign(stats, { requests: 0, errors: 0, retries: 0, rateHits: 0, rangeHits: 0, hosts: {} }); }
 const hostOf = (u: string) => { try { return new URL(u).hostname; } catch { return 'other'; } };
 let rr = 0;
+/* Endpoint health: an endpoint that fails 3 times in a row is benched for 3 minutes, and endpoints listed as
+ * last resort (registry rpc.lastResort) are only tried after the preferred ones. */
+const health = new Map<string, { bad: number; until: number }>();
+const LAST = new Set<string>(((REG.rpc as any).lastResort ?? []).map(hostOf));
+function markHost(url: string, ok: boolean) { const k = hostOf(url); const h = health.get(k) ?? { bad: 0, until: 0 }; if (ok) h.bad = 0; else if (++h.bad >= 3) { h.until = Date.now() + 180_000; h.bad = 0; } health.set(k, h); }
+export function benched(url: string) { return (health.get(hostOf(url))?.until ?? 0) > Date.now(); }
+/** Preferred healthy endpoints first, then last-resort, then benched ones (only if nothing else is left). */
+export function orderEps(eps: string[]): string[] {
+  const live = eps.filter(e => !benched(e)); const pre = live.filter(e => !LAST.has(hostOf(e)));
+  return [...pre, ...live.filter(e => LAST.has(hostOf(e))), ...eps.filter(e => benched(e))];
+}
+/** Endpoint for attempt i: round-robin over the preferred healthy ones first; later attempts walk the full order. */
+function pick(eps: string[], i: number): string {
+  const o = orderEps(eps); const pre = o.filter(e => !benched(e) && !LAST.has(hostOf(e)));
+  if (i < 2 && pre.length) return pre[rr++ % pre.length];
+  return o[i % o.length];
+}
+export function resetHealth() { health.clear(); }
 async function fetchJSON(url: string, init: RequestInit | undefined, timeoutMs = 60000): Promise<any> {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
@@ -29,8 +47,8 @@ async function fetchJSON(url: string, init: RequestInit | undefined, timeoutMs =
       const j = await r.json();
       if (j?.error && /rate|too many requests|exceeded/i.test(String(j.error.message || ''))) stats.rateHits++;
       if (j?.error && RANGE_RE.test(String(j.error.message || ''))) stats.rangeHits++;
-      return j;
-    } catch (e) { h.fail++; throw e; }
+      markHost(url, true); return j;
+    } catch (e) { h.fail++; markHost(url, false); throw e; }
     finally { if (Date.now() - t0 > 10000) h.slow++; }
   } finally { clearTimeout(t); }
 }
@@ -42,7 +60,7 @@ export async function rpc(method: string, params: any[], opts: { endpoints?: str
   const eps = opts.endpoints ?? REG.rpc.archive;
   const tries = opts.tries ?? 6; let err: any;
   for (let i = 0; i < tries; i++) {
-    const url = eps[(rr++ + i) % eps.length];
+    const url = pick(eps, i);
     try {
       const j = await lim(url, 10).run(() => fetchJSON(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }, opts.timeoutMs ?? 60000));
       if (j.error) {
@@ -69,7 +87,7 @@ export async function rpcBatch(reqs: [string, any[]][], size = 25): Promise<any[
   await Promise.all(groups.map(async g => {
     let err: any;
     for (let t = 0; t < 5; t++) {
-      const url = REG.rpc.archive[(rr++ + t) % REG.rpc.archive.length];
+      const url = pick(REG.rpc.archive, t);
       try {
         const j = await lim(url, 10).run(() => fetchJSON(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(g.map((k, id) => ({ jsonrpc: '2.0', id, method: reqs[k][0], params: reqs[k][1] }))) }, 60000));
         if (!Array.isArray(j)) throw new Error('bad batch');
@@ -146,7 +164,7 @@ async function logsAdaptive(filter: LogFilter, a: number, b: number, onProgress?
   const worker = async () => {
     while (jobs.length) {
       const job = jobs.shift()!; const size = job.b - job.a + 1;
-      const usable = eps.filter(e => (epCap.get(e) ?? Infinity) >= size);
+      const fit = eps.filter(e => (epCap.get(e) ?? Infinity) >= size); const ok = fit.filter(e => !benched(e)); const usable = ok.length ? ok : fit;
       if (!usable.length) { const cap = Math.max(...eps.map(e => epCap.get(e) ?? 0)) || 1000; for (let x = job.a; x <= job.b; x += cap) jobs.push({ a: x, b: Math.min(job.b, x + cap - 1), fails: 0 }); continue; }
       const ep = usable[k++ % usable.length];
       try {

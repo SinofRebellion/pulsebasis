@@ -1,6 +1,8 @@
 // Turns anonymous events into the owner dashboard numbers + a traffic-light "Server health" verdict.
 export type Ev = { t: number; k: 'visit' | 'scan' | 'selftest'; m?: boolean; ref?: string; ok?: boolean; cached?: boolean; ms?: number; att?: number; w?: number; req?: number; rt?: number; rl?: number; rg?: number; h?: Record<string, [number, number, number]> };
 
+/** Test / local referrers never belong in the owner's referral list. */
+export const isLocalRef = (r: string) => /(^|\.)(local|localhost|internal|test|example|invalid)$|^localhost|^127\.|^0\.0\.0\.0|^10\.|^192\.168\.|^\[?::1|^probe\b/i.test(r.trim().replace(/:\d+$/, '').replace(/^https?:\/\//, '').split('/')[0]);
 export const SERVER_NAMES: Record<string, string> = {
   'rpc.pulsechain.com': 'PulseChain main server',
   'rpc-pulsechain.g4mm4.io': 'Backup server (G4MM4)',
@@ -9,8 +11,9 @@ export const SERVER_NAMES: Record<string, string> = {
   'graph.pulsechain.com': 'PulseX price history',
   'eth.blockscout.com': 'Ethereum explorer',
   'ethereum-rpc.publicnode.com': 'Ethereum server (PublicNode)',
-  'eth.llamarpc.com': 'Ethereum server (Llama)',
-  'cloudflare-eth.com': 'Ethereum server (Cloudflare)',
+  'eth.drpc.org': 'Ethereum server (dRPC)',
+  'eth-mainnet.public.blastapi.io': 'Ethereum server (Blast)',
+  'coins.llama.fi': 'Price history (DefiLlama)',
 };
 // A scan "struggled" if it needed 2+ automatic restarts or was very slow (3x the usual time).
 // One automatic retry that then succeeds is normal and does not count as trouble.
@@ -46,7 +49,7 @@ export function summarize(events: Ev[], now = Date.now()) {
   const all7 = scans7.filter(e => e.ok && !e.cached).map(e => (e.ms ?? 0) / 1000);
   const normal = older.length >= 5 ? median(older) : all7.length >= 5 ? median(all7) : null;
   const H = health(scans1, normal);
-  const refs = new Map<string, number>(); for (const v of visits7) { const r = v.ref || 'Direct / unknown'; refs.set(r, (refs.get(r) ?? 0) + 1); }
+  const refs = new Map<string, number>(); for (const v of visits7) { if (v.ref && isLocalRef(v.ref)) continue; const r = v.ref || 'Direct / unknown'; refs.set(r, (refs.get(r) ?? 0) + 1); }
   const perDay: { day: string; visits: number; scans: number; failed: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const day = new Date(now - i * 86400e3).toISOString().slice(0, 10);
