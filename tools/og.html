@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0}
+body{width:1200px;height:630px;overflow:hidden;background:#07050d;font-family:ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;color:#f4f1fb;position:relative}
+.o{position:absolute;border-radius:50%;filter:blur(90px)}
+.o1{width:720px;height:720px;left:-260px;top:-330px;background:radial-gradient(circle,#ff0f6f,transparent 65%);opacity:.55}
+.o2{width:700px;height:700px;right:-260px;top:-80px;background:radial-gradient(circle,#8000ff,transparent 65%);opacity:.55}
+.o3{width:600px;height:600px;left:380px;top:360px;background:radial-gradient(circle,#18d4ff,transparent 65%);opacity:.22}
+.dots{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1.4px,transparent 1.4px);background-size:30px 30px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),transparent 85%)}
+.wrap{position:absolute;inset:0;padding:62px 72px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:22px}
+.brand svg{filter:drop-shadow(0 0 22px rgba(255,15,111,.7))}
+.name{font-size:96px;font-weight:850;letter-spacing:-.04em;line-height:1}
+.name b{background:linear-gradient(90deg,#ffdb01,#ff8500 30%,#ff0f6f 65%,#e100ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tag{margin-top:34px;font-size:50px;font-weight:780;letter-spacing:-.025em;line-height:1.1;max-width:760px}
+.sub{margin-top:22px;font-size:32px;color:#cfc8e2;font-weight:500;max-width:800px}
+.coins img{width:34px;height:34px;border-radius:50%}
+.coins{position:absolute;left:72px;bottom:58px;display:flex;gap:12px}
+.coins span{display:inline-flex;align-items:center;gap:10px;font-size:24px;font-weight:800;padding:7px 18px 7px 8px;border-radius:99px;border:2px solid var(--c);color:#fff;background:color-mix(in srgb,var(--c) 22%,transparent)}
+.card{position:absolute;right:66px;top:205px;width:300px;padding:24px 24px 20px;border-radius:24px;background:rgba(22,17,38,.75);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.card::after{content:"";position:absolute;inset:-1.5px;border-radius:inherit;padding:1.5px;background:linear-gradient(120deg,#ff0f6f,#a259ff,#18d4ff);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.8}
+.lbl{font-size:17px;letter-spacing:.12em;text-transform:uppercase;color:#9a92b4;font-weight:700}
+.bars{display:flex;align-items:flex-end;gap:14px;height:190px;margin:16px 4px 12px}
+.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;border-radius:8px;overflow:hidden}
+.p{background:#ff3d9a}.i{background:#a259ff}.f{background:rgba(24,212,255,.6)}
+.leg{display:flex;gap:10px;font-size:15px;color:#cfc8e2;font-weight:600}
+.leg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.url{position:absolute;right:72px;bottom:66px;font-size:24px;color:#9a92b4;font-weight:600}
+</style></head><body>
+<div class="o o1"></div><div class="o o2"></div><div class="o o3"></div><div class="dots"></div>
+<div class="wrap">
+ <div class="brand"><svg viewBox="0 0 32 32" width="96" height="96"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffdb01"/><stop offset=".35" stop-color="#ff8500"/><stop offset=".65" stop-color="#ff0f6f"/><stop offset="1" stop-color="#c000ff"/></linearGradient></defs><path d="M16 2 28.1 9v14L16 30 3.9 23V9z" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 17h4l2-5 3.5 9 2.5-6h4" fill="none" stroke="url(#g)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+ <div class="name">Pulse<b>Basis</b></div></div>
+ <div class="tag">Your true cost basis for HEX, PLS, PLSX, INC &amp; PRVX</div>
+ <div class="sub">Paste your addresses. See what you really paid.</div>
+</div>
+<div class="card"><div class="lbl">Stake + interest</div>
+ <div class="bars">
+  <div class="bar" style="height:38%"><div class="f" style="height:30%"></div><div class="i" style="height:20%"></div><div class="p" style="height:50%"></div></div>
+  <div class="bar" style="height:58%"><div class="f" style="height:34%"></div><div class="i" style="height:22%"></div><div class="p" style="height:44%"></div></div>
+  <div class="bar" style="height:100%"><div class="f" style="height:40%"></div><div class="i" style="height:14%"></div><div class="p" style="height:46%"></div></div>
+  <div class="bar" style="height:72%"><div class="f" style="height:36%"></div><div class="i" style="height:18%"></div><div class="p" style="height:46%"></div></div>
+ </div>
+ <div class="leg"><span><i style="background:#ff3d9a"></i>Principal</span><span><i style="background:#a259ff"></i>Interest</span><span><i style="background:rgba(24,212,255,.7)"></i>Future</span></div>
+</div>
+<div class="coins"><span style="--c:#ff3d9a"><img src="../public/coins/hex.png">HEX</span><span style="--c:#a259ff"><img src="../public/coins/pls.png">PLS</span><span style="--c:#18d4ff"><img src="../public/coins/plsx.png">PLSX</span><span style="--c:#3fe0a0"><img src="../public/coins/inc.png">INC</span><span style="--c:#ffb020"><img src="../public/coins/prvx.png">PRVX</span></div>
+<div class="url">pulsebasis.netlify.app</div>
+</body></html>
