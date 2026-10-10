@@ -265,11 +265,17 @@ export async function graphql(url: string, query: string): Promise<any> {
   throw isBusy(err) ? new BusyError() : err;
 }
 
+/* Free explorers rate-limit per visitor: Blockscout's classic API allows only a few calls per second and Routescan's
+ * keyless tier 2/s. Parallel bursts from one scan (Ethereum HEX + sacrifices at once) were tripping those limits, so
+ * these hosts get fewer parallel requests and a minimum gap between request starts. */
+const PACE: Record<string, [number, number]> = { 'eth.blockscout.com': [2, 250], 'api.routescan.io': [1, 600] };
+const nextAt = new Map<string, number>();
+async function pace(h: string, gap: number) { if (!gap) return; const now = Date.now(); const t = Math.max(now, nextAt.get(h) ?? 0); nextAt.set(h, t + gap); if (t > now) await sleep(t - now); }
 /** GET JSON from any public API (Ethereum explorer, price API) with per-host concurrency + retries. */
 export async function getJSON(url: string, tries = 4, timeoutMs = 45000): Promise<any> {
   let err: any; const h = (() => { try { return new URL(url).hostname; } catch { return url; } })();
   for (let i = 0; i < tries; i++) {
-    try { return await lim(h, 4).run(() => fetchJSON(url, undefined, timeoutMs)); }
+    try { const [n, gap] = PACE[h] ?? [4, 0]; return await lim(h, n).run(async () => { await pace(h, gap); return fetchJSON(url, undefined, timeoutMs); }); }
     catch (e) { err = e; stats.retries++; await sleep(isBusy(e) ? backoff(i + 1) : 800 * (i + 1) + Math.random() * 400); }
   }
   throw isBusy(err) ? new BusyError() : err;
