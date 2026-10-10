@@ -1,0 +1,27 @@
+// Unit test for the Server health traffic light + anonymous event sanitizer.
+import { summarize, health } from '../src/stats/summarize';
+import { clean } from '../netlify/functions/ev.mts';
+let bad = 0; const ok = (name: string, c: boolean, d = '') => { console.log(c ? 'PASS' : 'FAIL', name, d); if (!c) bad++; };
+const now = Date.UTC(2026, 9, 10, 18);
+const scan = (o: any = {}) => ({ t: now - 3600e3, k: 'scan' as const, ok: true, cached: false, ms: 110000, att: 1, rt: 2, rl: 0, rg: 0, w: 2, h: { 'rpc.pulsechain.com': [900, 1, 0] as [number, number, number] }, ...o });
+const old = Array.from({ length: 10 }, (_, i) => scan({ t: now - (2 + i % 5) * 86400e3, ms: 100000 }));
+const many = (n: number, o: any = {}) => Array.from({ length: n }, () => scan(o));
+ok('no scans -> green', health([], null).level === 'green');
+ok('live case: 4 scans, 2 retried once, 37s -> green "not enough"', (() => { const h = health([scan({ ms: 37000 }), scan({ ms: 37000 }), scan({ ms: 37000, att: 2 }), scan({ ms: 37000, att: 2 })], null); return h.level === 'green' && /Not enough scans/.test(h.why); })());
+ok('9 scans, 5 failed -> still green (under 10 scans)', health([...many(4), ...many(5, { ok: false })], null).level === 'green');
+ok('healthy day -> green', summarize([...old, ...many(20)], now).health.level === 'green');
+ok('single retries that succeed are not trouble -> green', summarize([...old, ...many(10), ...many(10, { att: 2, rl: 9, rt: 50 })], now).health.level === 'green');
+ok('1.5x slower -> yellow', (() => { const h = summarize([...old, ...many(12, { ms: 160000 })], now).health; return h.level === 'yellow' && /slower than usual/.test(h.why); })());
+ok('2.6x slower -> red', summarize([...old, ...many(12, { ms: 260000 })], now).health.level === 'red');
+ok('5% failed -> yellow', summarize([...old, ...many(19), scan({ ok: false })], now).health.level === 'yellow');
+ok('30% needed 2+ restarts -> yellow', summarize([...old, ...many(7), ...many(3, { att: 3 })], now).health.level === 'yellow');
+ok('10% failed but only 2 failures -> yellow, not red', summarize([...old, ...many(18), ...many(2, { ok: false })], now).health.level === 'yellow');
+ok('10% failed with 3 failures -> red', (() => { const h = summarize([...old, ...many(27), ...many(3, { ok: false })], now).health; return h.level === 'red' && /didn't finish/.test(h.why); })());
+const S = summarize([...old, scan(), { t: now - 100, k: 'visit', m: true, ref: 'x.com' }, { t: now - 200, k: 'visit', m: false, ref: '' }], now);
+ok('visits counted', S.visits.day === 2 && S.phoneShare === 50, JSON.stringify(S.visits));
+ok('per-day 7 entries', S.perDay.length === 7);
+ok('server names are plain English', S.servers[0]?.name === 'PulseChain main server', JSON.stringify(S.servers));
+const c = clean({ k: 'scan', ok: true, ms: 1e12, attempts: 2, address: '0xabc', wallets: 4, hosts: { 'evil.com': { n: 1 }, 'rpc.pulsechain.com': { n: 5, fail: 1, slow: 0 } }, extra: 'x' });
+ok('sanitizer drops unknown fields/hosts and clamps', !('address' in c) && !('extra' in c) && !c.h['evil.com'] && c.h['rpc.pulsechain.com'][0] === 5 && c.ms === 3600000, JSON.stringify(c));
+ok('visit referrer sanitized', clean({ k: 'visit', ref: '<script>' }).ref === '' && clean({ k: 'visit', ref: 'x.com' }).ref === 'x.com');
+console.log(bad ? `FAILED ${bad}` : 'ALL PASSED'); process.exit(bad ? 1 : 0);
