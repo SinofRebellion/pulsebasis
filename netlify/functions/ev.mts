@@ -1,15 +1,16 @@
 // Anonymous usage event sink. Stores no addresses, no IPs, no balances: only coarse, whitelisted fields.
 import { getStore } from '@netlify/blobs';
 import type { Config } from '@netlify/functions';
+import { isLocalRef } from '../../src/stats/summarize';
 
-const HOSTS = new Set(['rpc.pulsechain.com', 'rpc-pulsechain.g4mm4.io', 'pulsechain-rpc.publicnode.com', 'api.scan.pulsechain.com', 'graph.pulsechain.com', 'eth.blockscout.com', 'ethereum-rpc.publicnode.com', 'eth.llamarpc.com', 'cloudflare-eth.com']);
+const HOSTS = new Set(['rpc.pulsechain.com', 'rpc-pulsechain.g4mm4.io', 'pulsechain-rpc.publicnode.com', 'api.scan.pulsechain.com', 'graph.pulsechain.com', 'eth.blockscout.com', 'ethereum-rpc.publicnode.com', 'eth.drpc.org', 'eth-mainnet.public.blastapi.io', 'coins.llama.fi']);
 const int = (v: unknown, max: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(max, n)) : 0; };
 const REF = /^[a-z0-9.-]{1,60}$/;
 
 export function clean(b: any) {
   if (b?.k === 'selftest') return { t: Date.now(), k: 'selftest' };  // deploy check, excluded from all numbers
   const e: any = { t: Date.now(), k: b?.k === 'scan' ? 'scan' : 'visit', m: !!b?.m };
-  if (e.k === 'visit') { const r = String(b?.ref || '').toLowerCase(); e.ref = REF.test(r) ? r : ''; return e; }
+  if (e.k === 'visit') { const r = String(b?.ref || '').toLowerCase(); e.ref = REF.test(r) && !isLocalRef(r) ? r : ''; return e; }
   e.ok = !!b?.ok; e.cached = !!b?.cached; e.ms = int(b?.ms, 3_600_000); e.att = int(b?.attempts, 10); e.w = int(b?.wallets, 50);
   e.req = int(b?.requests, 1e6); e.rt = int(b?.retries, 1e6); e.rl = int(b?.rateHits, 1e6); e.rg = int(b?.rangeHits, 1e6);
   e.h = {};

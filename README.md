@@ -18,7 +18,7 @@ Unofficial. Not affiliated with Richard Heart, HEX, PulseChain or PulseX. Not fi
 - One tiny backend: `netlify/functions/ev.mts` stores anonymous usage counts (a visit happened, referring site, phone or not; per scan: duration, retries, rate/range-limit hits, per-server request/fail/slow counts, finished or not). No addresses, IPs or balances. Skipped for Do Not Track and automated browsers.
 - Owner dashboard: `/stats` (key in `PB_STATS_KEY`, read by `netlify/functions/stats.mts`). Traffic-light thresholds live in `src/stats/summarize.ts`.
 - A strict Content-Security-Policy (`index.html`) only allows connections to `rpc.pulsechain.com`, `rpc-pulsechain.g4mm4.io`, `api.scan.pulsechain.com` and `graph.pulsechain.com`. No third-party analytics, fonts or CDNs.
-- Downloaded history and block prices are cached in the browser's IndexedDB, so re-runs take seconds. "Clear local cache" wipes it.
+- Downloaded history and block prices are cached in the browser's IndexedDB, so re-runs take seconds. Nothing is stored on any server. "Clear my saved data" wipes it (saved addresses in localStorage plus the IndexedDB cache).
 
 ## Run / build
 
@@ -61,7 +61,3 @@ Add an entry to `ramps` in `src/engine/registry.json` with `match` (sender addre
 PulseBasis was conceived and created by **[@sinofrebellion](https://x.com/sinofrebellion)** and launched on **October 10, 2026** at https://pulsebasis.netlify.app.
 
 Licensed under the Apache License 2.0 (`LICENSE`). Redistributions and derivative works must keep the `NOTICE` file crediting @sinofrebellion as the original creator. Proof of authorship (SHA-256 hashes anchored in Bitcoin with OpenTimestamps) is in `AUTHORSHIP.md`.
-
-## Binary files in this repository
-
-Logos, the share image and the OpenTimestamps proof are stored as base64 text under `binary/` (with SHA-256 checksums in `binary/manifest.json`). `npm run dev` / `npm run build` restore them automatically; run `npm run restore` to do it by hand (for example before `ots verify proof/STATEMENT.txt.ots`).
