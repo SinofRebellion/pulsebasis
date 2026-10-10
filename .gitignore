@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.netlify/
+.env*
+*.log
+test/out*/
+test/live-out*/
+deliver/
