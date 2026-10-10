@@ -82,7 +82,7 @@ async function logsOf(kv: KV, a: string, topic: string): Promise<EthLog[]> {
 }
 
 /** USD prices at timestamps (DefiLlama batchHistorical, nearest within 12h), cached per coin+hour. */
-async function pricesAt(kv: KV, coin: string, tss: number[]): Promise<Record<number, number>> {
+export async function pricesAt(kv: KV, coin: string, tss: number[]): Promise<Record<number, number>> {
   const out: Record<number, number> = {}; const hrs = [...new Set(tss.map(t => Math.floor(t / 3600) * 3600))];
   const cached = await kv.getMany<number>(hrs.map(h => `eth:px:${coin}:${h}`)); const need: number[] = [];
   hrs.forEach((h, i) => { if (cached[i] != null) out[h] = cached[i]!; else need.push(h); });

@@ -633,5 +633,53 @@
       "https://eth.drpc.org",
       "https://eth-mainnet.public.blastapi.io"
     ]
+  },
+  "sacrifices": {
+    "notes": "Official sacrifice addresses and windows. Sources: Etherscan public name tags ('PulseChain: Sacrifice', 'PulseX: Sacrifice'); pulsex.com/sacrifice (web.archive 2022-01-17, rate schedule); HowToPulse + SEC complaint 1:23-cv-5749 (PulseChain window Jul 15 - Aug 3 2021, unofficially extended to ~Apr 6 2022); ProveX.info address as posted by Richard Heart (x.com/RichardHeartWin/status/1988423684395331878), window Nov 12 2025 - Jan 9 2026; PRVX distribution read on PulseChain (one mint to the distributor, which paid 7,465 wallets).",
+    "list": [
+      {
+        "id": "pulsechain",
+        "coin": "PLS",
+        "name": "PulseChain sacrifice",
+        "address": "0x9cd83be15a79646a3d22b81fc8ddf7b7240a62cb",
+        "from": "2021-07-15",
+        "to": "2022-04-06",
+        "ethBlocks": [
+          12829485,
+          14529007
+        ],
+        "chains": "Ethereum, BSC, Polygon, Avalanche, Optimism, ETC, BNB Beacon (we read Ethereum)",
+        "credit": "PLS added to your balance at the PulseChain launch (May 2023)"
+      },
+      {
+        "id": "pulsex",
+        "coin": "PLSX",
+        "name": "PulseX sacrifice",
+        "address": "0x075e72a5edf65f0a5f44699c7654c1a76941ddc8",
+        "from": "2021-12-28",
+        "to": "2022-02-26",
+        "ethBlocks": [
+          13890394,
+          14284847
+        ],
+        "chains": "Ethereum and several other networks (we read Ethereum)",
+        "credit": "PLSX minted to your wallet after launch"
+      },
+      {
+        "id": "provex",
+        "coin": "PRVX",
+        "name": "ProveX sacrifice",
+        "address": "0xafa2a89cb43619677d9c72e81f6d4c8a730a1022",
+        "from": "2025-11-12",
+        "to": "2026-01-10",
+        "ethBlocks": [
+          23779426,
+          24200572
+        ],
+        "chains": "Ethereum and many other networks (we read Ethereum; nothing from PulseChain was credited)",
+        "credit": "PRVX paid out on PulseChain by the ProveX distributor",
+        "distributor": "0xf6976f0355d510dc1c8239f8a1b31ea7b513926a"
+      }
+    ]
   }
 }
