@@ -183,7 +183,11 @@ export async function collectEth(addrs: string[], kv: KV, P: (detail: string) =>
   P('Reading Ethereum HEX daily payouts…');
   const daily: EthRaw['daily'] = {}; const all = Object.values(stakes).flat();
   if (all.length) {
-    const lo = Math.max(0, Math.min(...all.map(s => s.lockedDay), currentDay - 30)); const days = Array.from({ length: Math.max(0, currentDay - lo) }, (_, i) => lo + i);
+    // dailyDataRange reverts ("HEX: range invalid") past globals().dailyDataCount, which lags currentDay until someone
+    // calls dailyDataUpdate. Ethereum HEX has had few such calls lately, so clamp to the days that actually exist.
+    const ddc = Number(words(await erpc('eth_call', [{ to: HEX, data: '0xc3124525' }, 'latest']))[4] ?? BigInt(currentDay));
+    const endDay = Math.min(currentDay, ddc);
+    const lo = Math.max(0, Math.min(...all.map(s => s.lockedDay), endDay - 30)); const days = Array.from({ length: Math.max(0, endDay - lo) }, (_, i) => lo + i);
     const dc = await kv.getMany<[string, string]>(days.map(d => 'ehexday:' + d)); const miss: number[] = [];
     days.forEach((d, i) => { if (dc[i]) daily[d] = dc[i]!; else miss.push(d); });
     const ranges: [number, number][] = []; for (const d of miss) { const l = ranges[ranges.length - 1]; if (l && l[1] === d) l[1] = d + 1; else ranges.push([d, d + 1]); }
