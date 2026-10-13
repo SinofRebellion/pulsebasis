@@ -1,7 +1,7 @@
 {
   "version": 1,
   "chainId": 369,
-  "updated": "2026-10-10",
+  "updated": "2026-10-12",
   "notes": "Every arrival is caught generically from on-chain transfer logs + native/internal transfers. This registry only adds labels, fee rates and better valuation. Anything not matched is still counted at market value on arrival as 'Other / unknown sender'. 'verified' = confirmed from the project's own docs/repo or the PulseChain explorer's verified contract name; 'observed' = seen in real user history but not documented publicly; false = unverified.",
   "forkBlock": 17233000,
   "hexDeployBlock": 9041184,
@@ -155,6 +155,19 @@
       ],
       "pairs": [],
       "subgraphToken": "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8"
+    },
+    "HDRN": {
+      "name": "Hedron",
+      "dec": 9,
+      "rh": false,
+      "tokens": [
+        "0x3819f64f282bf135d62168c1e513280daf905e06"
+      ],
+      "pairs": [
+        "v1_HDRN",
+        "v2_HDRN"
+      ],
+      "subgraphToken": "0x3819f64f282bf135d62168c1e513280daf905e06"
     }
   },
   "stablePairs": [
@@ -257,6 +270,14 @@
     "v2_WBTC": {
       "pair": "0x8c52470a05eeb2fce4905688ec59bfdd32e71d07",
       "wpls_is_t0": true
+    },
+    "v1_HDRN": {
+      "pair": "0x5f4cb14a7858bdb9066f9e4b561cdc1623807da0",
+      "wpls_is_t0": false
+    },
+    "v2_HDRN": {
+      "pair": "0xbae2b1ac914255abe40ebe308458d592a0a9f44b",
+      "wpls_is_t0": false
     }
   },
   "lpManagers": {
@@ -722,6 +743,23 @@
         "credit": "PRVX paid out on PulseChain by the ProveX distributor",
         "distributor": "0xf6976f0355d510dc1c8239f8a1b31ea7b513926a"
       }
+    ]
+  },
+  "hedron": {
+    "notes": "Hedron HEX stake instances (HSIs). hexStakeStart sends the wallet's HEX straight to a new HSI contract, which stakes it (StakeStart stakerAddr = the HSI). hexStakeEnd mints the payout to the HSI, which sends it to the wallet. HDRN is minted from 0x0 as a reward. Checked on-chain: txs 0x6b130350… (start) and 0xe17352b8… (end).",
+    "hsim": "0x8bd3d1472a656e312e94fb1bbdd599b8c51d18e3",
+    "hdrn": "0x3819f64f282bf135d62168c1e513280daf905e06",
+    "startSel": "0xed0e43d1",
+    "endSel": "0xceca96e6",
+    "sources": [
+      "PulseChain explorer: verified contract HEXStakeInstanceManager 0x8BD3…18e3 and token Hedron (HDRN) 0x3819…5e06",
+      "PulseX v1/v2 factory getPair(HDRN, WPLS)"
+    ]
+  },
+  "custody": {
+    "notes": "Coins sent into a contract with nothing back in the same transaction (farms, lending, limit orders, escrow) are held as 'in contract' instead of being treated as sold. When the same coin comes back from that contract the held cost comes back with it; extra amounts are earnings at $0 cost. Never applies to DEX routers, bridges, HEX, LP managers, burn addresses or a token's own contract.",
+    "exclude": [
+      "0x000000000000000000000000000000000000dead"
     ]
   }
 }

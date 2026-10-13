@@ -21,6 +21,12 @@ const OMNI_OUT = new Set<string>(rampById('omnibridge').outTo);
 const GOPULSE = venueById('gopulse').to[0] as string;
 const GPFEE = venueById('gopulse').feeCollector[0] as string;
 const MINT_RAMPS: { id: string; toks: Set<string> }[] = ['omnibridge', 'hyperlane', 'coast'].map(id => ({ id, toks: new Set<string>(rampById(id).match.mintFromZero) }));
+const HSIM = lc(R.hedron.hsim as string), HDRN_TOK = lc(R.hedron.hdrn as string);
+const HSI_START = R.hedron.startSel as string, HSI_END = R.hedron.endSel as string;
+const CUST_EXCLUDE = new Set<string>(((R.custody?.exclude ?? []) as string[]).map(lc));
+// every bridge / on-ramp address we know is a way out, never a deposit that comes back
+for (const r of R.ramps) for (const x of [...(r.outTo ?? []), ...(r.match?.txTo ?? []), ...(r.match?.from ?? []), ...(r.match?.mintFromZero ?? [])]) CUST_EXCLUDE.add(lc(x));
+for (const sx of R.sacrifices?.list ?? []) { CUST_EXCLUDE.add(lc(sx.address)); if (sx.distributor) CUST_EXCLUDE.add(lc(sx.distributor)); }
 const VENUE_BY_TO = new Map<string, string>(); for (const v of R.venues) for (const t of v.to) VENUE_BY_TO.set(t, v.name);
 
 const AMAP: Record<string, string> = { PLS: 'PLS' };
@@ -171,6 +177,8 @@ export interface ReplayOut {
   lotsHeld: Record<string, { q: number; c: number; free: number }>;
   /** coins received from sacrifices: qty, cost given to them, and whether a cost was found */
   sacRecv: Record<SacCoin, { q: number; c: number; n: number }>; sacnfHeld: Record<string, number>;
+  /** coins currently held inside contracts (farms, lending, limit orders, escrow): cost kept, not sold */
+  inContract: { contract: string; asset: string; q: number; c: number; ts: number }[];
 }
 /** Sacrifice cost to spread over the coins each sacrifice produced (found on Ethereum + typed in by the user). */
 export interface SacIn { cost: Record<SacCoin, number>; qty?: Record<SacCoin, number>; ethAtFork: number | null }
@@ -205,6 +213,24 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
   let staked: [number, number] = [0, 0];
   const events: any[] = [], acq: (Acq & { _lot?: Lot })[] = [], moneyin: MoneyIn[] = [], moneyout: MoneyOut[] = [], income: ReplayOut['income'] = [], gas: ReplayOut['gas'] = [], fees: ReplayOut['fees'] = [];
   const lpPos: Record<string, { c: number; mv: number }> = {};
+  // Contract custody: cost of coins parked in a contract (by contract, then asset), plus their deposit-time value.
+  const cust: Record<string, { a: Record<string, { q: number; c: number; ts: number; mv: number; block: number; tx: string }> }> = {};
+  // Which contracts hand back what was put in (prescan over the whole history): a contract that returns at least
+  // half of every coin deposited is a farm/vault/lending pool, so other coins it pays out are rewards; otherwise a
+  // different coin coming back is the result of the deposit (a limit-order fill, an escrow trade) and carries its cost.
+  const depQ: Record<string, Record<string, number>> = {}, retQ: Record<string, Record<string, number>> = {};
+  for (const t of L) for (const f of t.flows) {
+    if (OWN.has(f.cp)) continue;
+    const a = asset(f.tok); const M = f.v < 0 ? depQ : retQ; const r = (M[f.cp] ??= {}); r[a] = (r[a] ?? 0) + Math.abs(f.v);
+  }
+  const returnsPrincipal = (c: string) => { const d = depQ[c] ?? {}; const ks = Object.keys(d); return ks.length > 0 && ks.every(a => (retQ[c]?.[a] ?? 0) >= d[a] * 0.5); };
+  const custodyTarget = (dst: string, tok: string | undefined) => raw.isContract[dst] === true && dst !== ZERO && !CUST_EXCLUDE.has(dst) && dst !== HEX && dst !== WPLS && dst !== MASTERCHEF
+    && !LIB_OUT.has(dst) && !LIB.has(dst) && !OMNI_OUT.has(dst) && !VENUE_BY_TO.has(dst) && !LPM.has(dst) && dst !== HSIM && dst !== tok && !PULSELN.has(dst) && !CUSTODIAL.has(dst);
+  // Hedron stake instances: HEX principal + cost per HSI
+  const hsiPos: Record<string, { q: number; c: number }> = {};
+  const hsiOwned = new Set<string>(); for (const list of Object.values(raw.hex.stakes)) for (const s of list) if (s.hsi) hsiOwned.add(s.hsi);
+  const hsiTokenize = new Map<string, string>(); // tx hash -> HSI turned into an NFT (hexStakeTokenize(uint256,address))
+  for (const a of raw.addrs) for (const x of raw.per[a].txlist) if (lc(x.to ?? '') === HSIM && (x.input ?? '').startsWith('0x9875cc05') && x.input.length >= 138) hsiTokenize.set(lc(x.hash), '0x' + x.input.slice(98, 138).toLowerCase());
   const warn: Record<string, number> = {}; const W_ = (k: string, v = 1) => { warn[k] = (warn[k] ?? 0) + v; };
   const LOTS: Record<string, Lot[]> = {}; const LAST: Record<string, Lot> = {};
   const unknownSenders = new Set<string>(); const unpricedIn: ReplayOut['unpricedIn'] = []; const junkAssets = new Set<string>();
@@ -261,6 +287,14 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
   for (const [as, q] of Object.entries(forkCopy)) { add(as, q, 0, 'free', null); income.push([L[0]?.ts ?? 0, 'Copied at the PulseChain fork', as, q, 0]); }
   if (forkStaked > 0) { staked = [forkStaked, 0]; (LOTS['HEX'] ??= []).push({ q: 0, c: 0, sq: forkStaked, sc: 0, q0: forkStaked, c0: 0, kind: 'free', ts: null }); forkCopy['HEX staked'] = forkStaked; }
 
+  {
+    const started = new Set<string>();
+    for (const t of L) if (lc(t.to ?? '') === HSIM && t.func === HSI_START) for (const f of t.flows) if (f.v < 0 && lc(f.tok) === HEX) started.add(f.cp);
+    for (const list of Object.values(raw.hex.stakes)) for (const s of list) if (s.hsi && !started.has(s.hsi)) {
+      const q = Number(s.stakedHearts) / 1e8; staked[0] += q; hsiPos[s.hsi] = { q, c: 0 };
+      (LOTS['HEX'] ??= []).push({ q: 0, c: 0, sq: q, sc: 0, q0: q, c0: 0, kind: 'free', ts: null }); forkCopy['HEX staked (Hedron)'] = (forkCopy['HEX staked (Hedron)'] ?? 0) + q;
+    }
+  }
   for (const t of L) {
     const ts = t.ts, h = t.hash; CURB = t.block;
     const snd = raw.txInfo[h];
@@ -277,6 +311,16 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
       net[a] = (net[a] ?? 0) + v; (cps[a] ??= new Set()).add(cp); (wal[a] ??= new Set()).add(w);
     }
     for (const a of Object.keys(net)) if (!(Math.abs(net[a]) > 1e-12)) delete net[a];
+    // Hedron stake turned into an NFT that this wallet no longer owns: the stake left the wallet (sold / sent)
+    { const hsi = hsiTokenize.get(h); const pos = hsi ? hsiPos[hsi] : undefined;
+      if (hsi && pos && !hsiOwned.has(hsi)) {
+        const Pp = pos.q; const f = staked[0] > 0 ? Math.min(1, Pp / staked[0]) : 0; const c = staked[1] * f; staked[0] -= Pp; staked[1] -= c;
+        if (staked[0] < 1e-6) staked = [Math.max(staked[0], 0), Math.max(staked[1], 0)];
+        for (const l of LOTS['HEX'] ?? []) { l.sq -= l.sq * f; l.sc -= l.sc * f; }
+        delete hsiPos[hsi]; events.push([ts, 'hsi_out', Pp, c, hsi]);
+        const m = mv('HEX', Pp, ts) ?? 0;
+        if (m >= 1) moneyout.push({ date: dstr(ts), ts, block: t.block, psrc: price_b('HEX', ts)[1], kind: 'Hedron stake moved out as an NFT', ramp: 'other', asset: 'HEX', amount: Pp, usd: m, cost: c, cp: hsi, tx: h });
+      } }
     if (!Object.keys(net).length) continue;
     const ins: Record<string, number> = {}, outs: Record<string, number> = {};
     for (const [a, v] of Object.entries(net)) { if (v > 0) ins[a] = v; else outs[a] = -v; }
@@ -298,6 +342,64 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
       for (const l of LOTS['HEX'] ?? []) { const rq = l.sq * f, rc = l.sc * f; l.sq -= rq; l.sc -= rc; l.q += rq * (Pp > 0 ? Rq / Pp : 1); l.c += rc; }
       events.push([ts, 'stake_end', Pp, Rq, pay, pen, c, mv('HEX', 1, ts), t.block]);
       if (pay > 0) income.push([ts, 'HEX stake interest', 'HEX', pay, mv('HEX', pay, ts) ?? 0]);
+    }
+    // Hedron stake start: HEX goes from the wallet into a fresh HSI contract that stakes it
+    if (ours && to === HSIM && t.func === HSI_START && 'HEX' in outs && cps['HEX']?.size === 1) {
+      const hsi = [...cps['HEX']][0]; const q = outs['HEX']; delete outs['HEX'];
+      const c = take('HEX', q, true); staked[0] += q; staked[1] += c; const p = (hsiPos[hsi] ??= { q: 0, c: 0 }); p.q += q; p.c += c;
+      events.push([ts, 'stake_start', q, c, 'hedron']);
+    }
+    // Hedron stake end: the HSI ends its HEX stake and sends principal + interest to the wallet
+    if (to === HSIM && t.func === HSI_END && 'HEX' in ins && cps['HEX']?.size === 1) {
+      const hsi = [...cps['HEX']][0]; const Rq = ins['HEX']; delete ins['HEX'];
+      const pos = hsiPos[hsi];
+      if (pos) {
+        const Pp = pos.q; const f = staked[0] > 0 ? Math.min(1, Pp / staked[0]) : 0; const c = staked[1] * f; staked[0] -= Pp; staked[1] -= c;
+        if (staked[0] < 1e-6) staked = [Math.max(staked[0], 0), Math.max(staked[1], 0)];
+        P('HEX')[0] += Rq; P('HEX')[1] += c;
+        for (const l of LOTS['HEX'] ?? []) { const rq = l.sq * f, rc = l.sc * f; l.sq -= rq; l.sc -= rc; l.q += rq * (Pp > 0 ? Rq / Pp : 1); l.c += rc; }
+        delete hsiPos[hsi];
+        const pay = Math.max(0, Rq - Pp), pen = Math.max(0, Pp - Rq);
+        events.push([ts, 'stake_end', Pp, Rq, pay, pen, c, mv('HEX', 1, ts), t.block, 'hedron']);
+        if (pay > 0) income.push([ts, 'HEX stake interest (Hedron)', 'HEX', pay, mv('HEX', pay, ts) ?? 0]);
+      } else {
+        // an HSI from before this history (e.g. bought as an NFT): no known principal, so $0 cost
+        add('HEX', Rq, 0, 'free', ts); income.push([ts, 'Hedron stake ended (start not in this history)', 'HEX', Rq, mv('HEX', Rq, ts) ?? 0]);
+      }
+    }
+    // HDRN minted to the wallet = Hedron reward (earnings at $0 cost)
+    if ('HDRN' in ins && cps['HDRN']?.size === 1 && cps['HDRN'].has(ZERO) && t.flows.some(f => f.v > 0 && lc(f.tok) === HDRN_TOK)) {
+      const q = ins['HDRN']; delete ins['HDRN']; add('HDRN', q, 0, 'free', ts); income.push([ts, 'Hedron (HDRN) reward', 'HDRN', q, mv('HDRN', q, ts) ?? 0]);
+    }
+    // Coins coming back from a contract that holds coins for this wallet: restore their cost (custody return)
+    for (const a of Object.keys(ins)) {
+      const cs = [...(cps[a] ?? [])]; if (cs.length !== 1 || !cust[cs[0]]) continue;
+      if (Object.keys(outs).length) break; // part of a swap-like tx: leave it to the swap logic
+      const C = cs[0], K = cust[C]; const q = ins[a]; delete ins[a];
+      const m = isJL(a) ? 0 : (mv(a, q, ts) ?? 0);
+      const held = K.a[a];
+      if (held && held.q > 0) {
+        const back = Math.min(q, held.q); const f = back / held.q; const c = held.c * f;
+        held.q -= back; held.c -= c; held.mv *= 1 - f;
+        if (held.q <= 1e-12) delete K.a[a];
+        add(a, back, c, c > 0 ? 'acq' : 'free', ts);
+        events.push([ts, 'custody_out', C, a, back, c]);
+        const extra = q - back;
+        if (extra > 1e-12) { add(a, extra, 0, 'free', ts); income.push([ts, 'Earned in a contract (farm / pool / lending)', a, extra, isJL(a) ? 0 : (mv(a, extra, ts) ?? 0)]); }
+      } else if (returnsPrincipal(C) || !(Object.values(K.a).reduce((t, x) => t + x.mv, 0) > 0 && m >= 0.5 * Object.values(K.a).reduce((t, x) => t + x.mv, 0))) {
+        // a farm / pool / lender paying out something else (small vs what's inside, or the contract hands deposits back): earnings
+        add(a, q, 0, 'free', ts); if (isJL(a)) junkAssets.add(a);
+        income.push([ts, 'Earned in a contract (farm / pool / lending)', a, q, m]);
+      } else {
+        // a different coin comes back (limit-order fill, escrow trade): it takes over the deposit's cost by value
+        let tc = 0, tmv = 0; for (const x of Object.values(K.a)) { tc += x.c; tmv += x.mv; }
+        const f = Math.min(1, m / tmv); const c = tc * f;
+        for (const k of Object.keys(K.a)) { const x = K.a[k]; x.q *= 1 - f; x.c *= 1 - f; x.mv *= 1 - f; if (x.q <= 1e-12) delete K.a[k]; }
+        add(a, q, c, c > 0 ? 'acq' : 'free', ts); if (isJL(a)) junkAssets.add(a);
+        events.push([ts, 'custody_fill', C, a, q, c]);
+        if (c <= 0 && (COINS as readonly string[]).includes(a)) income.push([ts, 'Earned in a contract (farm / pool / lending)', a, q, m]);
+      }
+      if (!Object.keys(K.a).length) delete cust[C];
     }
     for (const a of Object.keys(ins)) {
       // PLSX minted straight to the wallet = the PulseX sacrifice airdrop/claim: free coins, $0 cost
@@ -414,7 +516,19 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
       }
       continue;
     }
-    if (nOut) {
+    if (nOut && ours && !LIB_OUT.has(to) && !OMNI_OUT.has(to)) {
+      // Coins put into a contract with nothing back (farm, lending, limit order, escrow): hold their cost, don't sell
+      for (const a of Object.keys(outs)) {
+        const cs = [...(cps[a] ?? [])]; if (cs.length !== 1) continue;
+        const tok = a.includes(':') ? a.split(':')[1] : (R.assets[a]?.tokens ?? []).find((x: string) => x !== 'PLS');
+        if (!custodyTarget(cs[0], tok)) continue;
+        const q = outs[a]; delete outs[a]; const c = take(a, q); const m = isJL(a) ? 0 : (mv(a, q, ts) ?? 0);
+        const K = (cust[cs[0]] ??= { a: {} }); const x = (K.a[a] ??= { q: 0, c: 0, ts, mv: 0, block: t.block, tx: h }); x.q += q; x.c += c; x.mv += m;
+        events.push([ts, 'custody_in', cs[0], a, q, c]);
+      }
+      if (!Object.keys(outs).length) continue;
+    }
+    if (Object.keys(outs).length && !Object.keys(ins).length) {
       const cpall = new Set<string>(); for (const a of Object.keys(outs)) for (const c of cps[a] ?? []) cpall.add(c);
       let kind: string, ramp = 'other';
       if (LIB_OUT.has(to)) { kind = 'LibertySwap bridge-out'; ramp = 'libertyswap'; }
@@ -438,7 +552,14 @@ export function replay(raw: Raw, L: Tx[], PR: Prices, senders: Raw['senders'] = 
     lotsHeld[a] = { q: (LOTS[a] ?? []).reduce((s, l) => s + l.q + l.sq, 0), c: (LOTS[a] ?? []).reduce((s, l) => s + l.c + l.sc, 0), free: freeheld[a] };
   }
   const sacnfHeld: Record<string, number> = {}; for (const a of Object.keys(LOTS)) { const v = LOTS[a].filter(l => l.kind === 'sacnf').reduce((t, l) => t + l.q + l.sq, 0); if (v > 0) sacnfHeld[a] = v; }
-  return { pools, staked, acq, moneyin, moneyout, income, gas, fees, events, warn, pstat, freeheld, unknownSenders, unpricedIn, junkAssets, forkCopy, venues, lotsHeld, sacRecv, sacnfHeld };
+  const inContract: ReplayOut['inContract'] = [];
+  for (const [C, K] of Object.entries(cust)) for (const [a, x] of Object.entries(K.a)) if (x.q > 1e-12) {
+    inContract.push({ contract: C, asset: a, q: x.q, c: x.c, ts: x.ts });
+    // still counts as money that left the wallet (it may never come back: escrow sale, unknown bridge, spent)
+    if (!isJL(a) && x.mv >= 1.0) moneyout.push({ date: dstr(x.ts), ts: x.ts, block: x.block, psrc: a === 'USD' ? 'stablecoin' : 'daily', kind: 'Put into a contract (not returned)', ramp: 'other', asset: a, amount: x.q, usd: x.mv, cost: x.c, cp: C, tx: x.tx });
+  }
+  moneyout.sort((p, q) => p.ts - q.ts);
+  return { pools, staked, acq, moneyin, moneyout, income, gas, fees, events, warn, pstat, freeheld, unknownSenders, unpricedIn, junkAssets, forkCopy, venues, lotsHeld, sacRecv, sacnfHeld, inContract };
 }
 function fmtq(q: number) { return q >= 1000 ? Math.round(q).toLocaleString('en-US') : q.toPrecision(4); }
 function symOf(a: string, meta: Raw['tokenMeta']) { if (a.includes(':')) return meta[a.split(':')[1]]?.sym ?? a.split(':')[0]; return a; }

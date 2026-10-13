@@ -18,7 +18,7 @@ export interface Raw {
   gp: Record<string, { int: [string, string, string][]; tt: [string, string, string, string][] } | null>;
   reserves: Record<number, Record<string, [string, string] | null>>;
   daily: Record<string, { date: number; priceUSD: string; totalLiquidityUSD: string }[]>;
-  hex: { currentDay: number; dailyDataCount: number; daily: Record<number, [string, string]>; stakes: Record<string, { stakeId: number; stakedHearts: string; stakeShares: string; lockedDay: number; stakedDays: number; unlockedDay: number }[]> };
+  hex: { currentDay: number; dailyDataCount: number; daily: Record<number, [string, string]>; stakes: Record<string, { stakeId: number; stakedHearts: string; stakeShares: string; lockedDay: number; stakedDays: number; unlockedDay: number; hsi?: string }[]> };
   balNow: Record<string, Record<string, string>>;
   balFork: Record<string, Record<string, string>>;
   senders: Record<string, { txs: number; name: string | null; contract: boolean }>;
@@ -289,6 +289,35 @@ export async function collect(addrsIn: string[], kv: KV, progress: Progress, opt
     const w = words(r); if (w.length < 7) return;
     stakes[sidx[i][0]].push({ stakeId: Number(w[0]), stakedHearts: w[1].toString(), stakeShares: w[2].toString(), lockedDay: Number(w[3]), stakedDays: Number(w[4]), unlockedDay: Number(w[5]) });
   });
+  // Hedron: HEX stakes held inside Hedron stake instances (HSIs). Each HSI is its own small contract that owns
+  // one HEX stake; the wallet owns the HSI (listed in hsiLists, or as an HSI NFT once tokenized).
+  try {
+    const HSIM = (REG as any).hedron.hsim as string;
+    const hc = await multicall(addrs.flatMap(a => [{ target: HSIM, data: '0xb947e629' + pad32(a) }, { target: HSIM, data: '0x' + SEL.balanceOf + pad32(a) }]), 'latest');
+    const lcalls: Call[] = []; const lown: string[] = []; const ncalls: Call[] = []; const nown: string[] = [];
+    addrs.forEach((a, i) => {
+      const n = Number(words(hc[i * 2])[0] ?? 0n), nt = Number(words(hc[i * 2 + 1])[0] ?? 0n);
+      for (let k = 0; k < Math.min(n, 500); k++) { lcalls.push({ target: HSIM, data: '0xf2b29141' + pad32(a) + u(k) }); lown.push(a); }
+      for (let k = 0; k < Math.min(nt, 500); k++) { ncalls.push({ target: HSIM, data: '0x2f745c59' + pad32(a) + u(k) }); nown.push(a); }
+    });
+    const hsis: [string, string][] = [];
+    if (lcalls.length) (await multicall(lcalls, 'latest', 100)).forEach((r, i) => { const w = words(r)[0]; if (w) hsis.push([lown[i], '0x' + w.toString(16).padStart(40, '0')]); });
+    if (ncalls.length) {
+      const ids = await multicall(ncalls, 'latest', 100);
+      const tc: Call[] = []; const town: string[] = [];
+      ids.forEach((r, i) => { const w = words(r)[0]; if (w !== undefined) { tc.push({ target: HSIM, data: '0x1322e104' + u(w) }); town.push(nown[i]); } });
+      if (tc.length) (await multicall(tc, 'latest', 100)).forEach((r, i) => { const w = words(r)[0]; if (w) hsis.push([town[i], '0x' + w.toString(16).padStart(40, '0')]); });
+    }
+    if (hsis.length) {
+      const sc = await multicall(hsis.map(([, h]) => ({ target: HEXA, data: '0x' + SEL.stakeCount + pad32(h) })), 'latest', 100);
+      const c2: Call[] = []; const i2: [string, string][] = [];
+      hsis.forEach(([a, h], i) => { const n = Number(words(sc[i])[0] ?? 0n); for (let k = 0; k < Math.min(n, 5); k++) { c2.push({ target: HEXA, data: '0x' + SEL.stakeLists + pad32(h) + u(k) }); i2.push([a, h]); } });
+      (await multicall(c2, 'latest', 100)).forEach((r, i) => {
+        const w = words(r); if (w.length < 7) return;
+        stakes[i2[i][0]].push({ stakeId: Number(w[0]), stakedHearts: w[1].toString(), stakeShares: w[2].toString(), lockedDay: Number(w[3]), stakedDays: Number(w[4]), unlockedDay: Number(w[5]), hsi: i2[i][1] });
+      });
+    }
+  } catch { /* Hedron read is best-effort: native stakes are unaffected */ }
   const allSt = Object.values(stakes).flat();
   const dd: Record<number, [string, string]> = {};
   const hiDay = Math.min(currentDay, dailyDataCount || currentDay);
