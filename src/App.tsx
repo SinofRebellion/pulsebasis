@@ -25,6 +25,19 @@ export default function App() {
   const [err, setErr] = useState('');
   const [t0, setT0] = useState(0); const [, tick] = useState(0);
   const worker = useRef<Worker | null>(null);
+  // New-version check: a tab opened before a deploy keeps running the old code. Compare this page's main script
+  // with the one the server now serves (no-store), on focus and before each scan; offer a reload if it changed.
+  const [newVer, setNewVer] = useState(false);
+  const checkVer = async () => {
+    try {
+      const mine = [...document.querySelectorAll('script[src*="/assets/"]')].map(s => (s as HTMLScriptElement).src.split('/').pop()).join(',');
+      if (!mine) return false;
+      const html = await (await fetch('/?v=' + Date.now(), { cache: 'no-store' })).text();
+      const live = [...html.matchAll(/src="[^"]*\/assets\/([^"]+\.js)"/g)].map(m => m[1]).join(',');
+      const changed = !!live && live !== mine; if (changed) setNewVer(true); return changed;
+    } catch { return false; }
+  };
+  useEffect(() => { const f = () => { if (document.visibilityState === 'visible') checkVer(); }; document.addEventListener('visibilitychange', f); const i = setInterval(checkVer, 10 * 60e3); return () => { document.removeEventListener('visibilitychange', f); clearInterval(i); }; }, []);
   useEffect(() => { if (status !== 'running') return; const i = setInterval(() => tick(x => x + 1), 500); return () => clearInterval(i); }, [status]);
   useEffect(() => { const w = wallets.filter(w => w.address || w.label); if (w.length) localStorage.setItem(LS, JSON.stringify(w)); else localStorage.removeItem(LS); }, [wallets]);
 
@@ -32,6 +45,7 @@ export default function App() {
   const labels = useMemo(() => Object.fromEntries(valid.map((w, i) => [w.address.toLowerCase(), w.label || `Wallet ${i + 1}`])), [wallets]);
   const run = () => {
     if (!valid.length) return;
+    checkVer();
     worker.current?.terminate();
     const wk = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }); worker.current = wk;
     setStatus('running'); setErr(''); setReport(null); setSteps([]); setT0(Date.now()); setProg({ phase: 'Starting', detail: '', pct: 0 });
@@ -39,7 +53,7 @@ export default function App() {
       const m = e.data;
       if (m.type === 'progress') { setProg(m); setSteps(s => s[s.length - 1] === m.phase ? s : [...s, m.phase]); }
       if (m.type === 'done') { trackScan(m.health); setReport(m.report); (window as any).__PB = { report: m.report, ms: m.ms, requests: m.requests, timings: m.timings }; setRunInfo({ ms: m.ms, requests: m.requests }); setStatus('done'); wk.terminate(); setTimeout(() => document.getElementById('position')?.scrollIntoView({ behavior: 'smooth' }), 80); }
-      if (m.type === 'error') { trackScan(m.health); setErr(m.kind === 'busy' ? 'busy' : 'other'); setStatus('error'); wk.terminate(); }
+      if (m.type === 'error') { checkVer(); trackScan(m.health); setErr(m.kind === 'busy' ? 'busy' : 'other'); setStatus('error'); wk.terminate(); }
     };
     wk.onerror = e => { console.warn('PulseBasis: worker error', e.message); setErr('other'); setStatus('error'); };
     wk.postMessage({ type: 'run', addrs: valid.map(w => w.address.trim().toLowerCase()), manual: manualRef.current });
@@ -67,7 +81,10 @@ export default function App() {
   };
   const elapsed = status === 'running' ? Math.round((Date.now() - t0) / 1000) : 0;
 
-  return (
+  return (<>
+    {newVer && <div className="card" data-testid="newver" style={{ position: 'sticky', top: 0, zIndex: 50, margin: 0, borderRadius: 0, textAlign: 'center' }}>
+      <b>A new version of PulseBasis is available.</b> <button className="btn primary" onClick={() => location.reload()} data-testid="reload">Reload</button>
+      <span className="muted small"> Your saved progress is kept.</span></div>}
     <div className="app">
       <div className="bg-orbs" aria-hidden><i className="o1" /><i className="o2" /><i className="o3" /></div>
       <header className="topbar">
@@ -134,7 +151,7 @@ export default function App() {
 
       <Footer />
     </div>
-  );
+  </>);
 }
 
 function QuoteTicker() {

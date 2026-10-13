@@ -17,11 +17,11 @@ self.onmessage = async (e: MessageEvent) => {
     for (let attempt = 0; ; attempt++) {
       try { r = await runAll(addrs, kv, prog, undefined, manual || {}); break; }
       catch (e: any) {
-        if (attempt >= 3 || (isBusy(e) && attempt >= 1)) throw e;   // every call already retried patiently; don't keep the visitor waiting
+        if (attempt >= 4) throw e;   // each resume keeps everything already saved, so busy servers get several patient tries   // every call already retried patiently; don't keep the visitor waiting
         attempts++;
         console.warn('PulseBasis: run attempt', attempt + 1, 'failed, resuming:', String(e?.message || e).slice(0, 300));
         prog({ phase: 'Retrying', detail: 'A public server hiccuped. Resuming from what is already saved…', pct: 50 });
-        await new Promise(res => setTimeout(res, [3000, 10000, 25000][attempt]));
+        await new Promise(res => setTimeout(res, [5000, 15000, 30000, 45000][attempt]));
       }
     }
     (self as any).postMessage({ type: 'done', report: r.report, ms: r.ms, timings: r.timings, requests: r.requests, health: health(true, repeat) });

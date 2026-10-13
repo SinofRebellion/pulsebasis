@@ -11,7 +11,7 @@ class Limiter {
   }
 }
 const limiters = new Map<string, Limiter>();
-const lim = (host: string, max: number) => { let l = limiters.get(host); if (!l) { l = new Limiter(max); limiters.set(host, l); } return l; };
+const lim = (host: string, max: number) => { let l = limiters.get(host); if (!l) { l = new Limiter(max); limiters.set(host, l); } l.max = max; return l; };
 
 export const stats = { requests: 0, errors: 0, retries: 0, rateHits: 0, rangeHits: 0, hosts: {} as Record<string, { n: number; fail: number; slow: number }> };
 export function resetStats() { Object.assign(stats, { requests: 0, errors: 0, retries: 0, rateHits: 0, rangeHits: 0, hosts: {} }); }
@@ -245,18 +245,21 @@ export async function getLogsAll(filter: LogFilter, fromBlock: number, toBlock: 
 export async function scan(params: Record<string, string | number>): Promise<any> {
   const url = REG.rpc.scan + '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
   let err: any;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 10; i++) {
     try {
-      const j = await lim('scan', 4).run(() => fetchJSON(url, undefined, 90000));
+      const j = await lim('scan', scanPar()).run(() => fetchJSON(url, undefined, 90000));
       return j;
-    } catch (e) { err = e; stats.retries++; await sleep(isBusy(e) ? backoff(i + 1) : 1000 * (i + 1)); }
+    } catch (e: any) { err = e; stats.retries++; if (e?.code === 429) scanLimited = Date.now(); await sleep(isBusy(e) ? backoff(i + 1) : 1000 * (i + 1)); }
   }
   throw isBusy(err) ? new BusyError() : err;
 }
+/* After a 429 from the explorer, drop to 2 parallel requests for a minute. */
+let scanLimited = 0;
+const scanPar = () => Date.now() - scanLimited < 60_000 ? 2 : 4;
 export async function scanV2(path: string): Promise<any> {
   let err: any;
-  for (let i = 0; i < 4; i++) {
-    try { return await lim('scan', 4).run(() => fetchJSON(REG.rpc.scanV2 + path, undefined, 45000)); }
+  for (let i = 0; i < 7; i++) {
+    try { return await lim('scan', scanPar()).run(() => fetchJSON(REG.rpc.scanV2 + path, undefined, 45000)); }
     catch (e) { err = e; await sleep(isBusy(e) ? backoff(i + 1) : 800 * (i + 1)); }
   }
   throw isBusy(err) ? new BusyError() : err;
