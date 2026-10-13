@@ -25,6 +25,7 @@ export interface Raw {
   timings: Record<string, number>;
   statusFixed?: number;
   approxLogs?: string[];
+  resGap?: number;
 }
 
 const HEXA = REG.contracts.HEX;
@@ -34,11 +35,21 @@ const hx = (n: number) => '0x' + n.toString(16);
 /** Multicall at a given block, auto-splitting large call sets. */
 export async function multicall(calls: Call[], block: number | 'latest', size = 120): Promise<(string | null)[]> {
   const out: (string | null)[] = [];
-  for (const c of chunk(calls, size)) {
-    const r = await rpc('eth_call', [{ to: MC, data: encodeTryAggregate(c) }, block === 'latest' ? 'latest' : hx(block)], { timeoutMs: 60000 });
-    out.push(...decodeTryAggregate(r));
-  }
+  for (const c of chunk(calls, size)) out.push(...await mcPart(c, block));
   return out;
+}
+/* One hostile/broken token (e.g. a scam contract that burns all gas) can make the whole batch fail with
+ * "out of gas" or a revert. Split the batch in half until the bad call is isolated; that call alone reads as null. */
+async function mcPart(c: Call[], block: number | 'latest'): Promise<(string | null)[]> {
+  try {
+    const r = await rpc('eth_call', [{ to: MC, data: encodeTryAggregate(c) }, block === 'latest' ? 'latest' : hx(block)], { timeoutMs: 60000 });
+    return decodeTryAggregate(r);
+  } catch (e: any) {
+    if (!/out of gas|gas required|execution reverted|invalid opcode|stack/i.test(String(e?.message || e))) throw e;
+    if (c.length === 1) return [null];
+    const m = Math.ceil(c.length / 2);
+    return [...await mcPart(c.slice(0, m), block), ...await mcPart(c.slice(m), block)];
+  }
 }
 
 async function cached<T>(kv: KV, key: string, fn: () => Promise<T>): Promise<T> {
@@ -46,16 +57,49 @@ async function cached<T>(kv: KV, key: string, fn: () => Promise<T>): Promise<T> 
   const r = await fn(); await kv.set(key, r); return r;
 }
 
-async function scanAll(action: string, address: string): Promise<any[]> {
-  const all: any[] = []; const off = 250;
-  for (let page = 1; page < 400; page++) {
-    const j = await scan({ module: 'account', action, address, page, offset: off, sort: 'asc' });
+/* Explorer account lists (txlist / txlistinternal). Busy wallets have 100k+ rows, and the explorer's page-number
+ * paging is slow, capped, and inconsistent on deep pages (internal page 1 and 2 overlap). So we walk by block:
+ * each call asks for start_block=<last block seen> (inclusive, deduped), the block range is split into parallel
+ * segments, and progress is saved to the cache after every segment so Resume continues instead of restarting. */
+const rowKey = (x: any) => lc(x.hash ?? x.transactionHash) + ':' + (x.index ?? x.traceId ?? x.transactionIndex ?? '') + ':' + lc(x.from) + ':' + lc(x.to) + ':' + x.value;
+async function scanRange(action: string, address: string, b0: number, b1: number, onPage?: (n: number) => void): Promise<any[]> {
+  const off = 250; const out: any[] = []; const seen = new Set<string>(); let from = b0; let page = 1;
+  for (let guard = 0; guard < 20000; guard++) {
+    const j = await scan({ module: 'account', action, address, start_block: from, end_block: b1, page, offset: off, sort: 'asc' });
     const res = Array.isArray(j?.result) ? j.result : [];
     if (!Array.isArray(j?.result) && j?.message && !/no (transactions|internal)/i.test(j.message) && j.status !== '0') throw new Error('explorer: ' + j.message);
-    all.push(...res);
+    let maxB = from;
+    for (const x of res) { const b = +x.blockNumber; if (b < b0 || b > b1) continue; const k = rowKey(x); if (!seen.has(k)) { seen.add(k); out.push(x); } maxB = Math.max(maxB, b); }
+    onPage?.(res.length);
     if (res.length < off) break;
+    if (maxB === from) page++;            // one block holds a full page: page within that block
+    else { from = maxB; page = 1; }       // inclusive restart at the last block, deduped above
   }
-  return all;
+  return out;
+}
+async function scanAll(kv: KV, action: string, address: string, latest: number, onPage?: (n: number) => void): Promise<any[]> {
+  const key = `scan:${action}:${address}`; const safe = latest - 64;
+  const c = await kv.get<{ to: number; rows: any[]; segs?: Record<string, any[]> }>(key);
+  const start = c ? c.to + 1 : 0; const rows: any[] = c ? c.rows : [];
+  if (start > latest) return rows;
+  // Old history (copied from Ethereum) is sparse; split the PulseChain part into 4 parallel segments.
+  const bounds: [number, number][] = [];
+  const pStart = Math.max(start, REG.forkBlock + 1);
+  if (start <= REG.forkBlock) bounds.push([start, REG.forkBlock]);
+  const N = latest - pStart > 200_000 ? 4 : 1; const step = Math.ceil((latest - pStart + 1) / N);
+  for (let i = 0; i < N; i++) { const a = pStart + i * step; if (a <= latest) bounds.push([a, Math.min(latest, a + step - 1)]); }
+  const segs = c?.segs ?? {};
+  const got = await Promise.all(bounds.map(async ([a, b]) => {
+    const sk = a + '-' + b; if (segs[sk]) return segs[sk];
+    const r = await scanRange(action, address, a, b, onPage);
+    if (b <= safe) { segs[sk] = r; await kv.set(key, { to: start - 1, rows, segs }); }   // finished segment survives a failed run
+    return r;
+  }));
+  const seen = new Set(rows.map(rowKey));
+  for (const r of got) for (const x of r) { const k = rowKey(x); if (!seen.has(k)) { seen.add(k); rows.push(x); } }
+  rows.sort((x, y) => +x.blockNumber - +y.blockNumber);
+  await kv.set(key, { to: safe, rows: rows.filter(x => +x.blockNumber <= safe) });
+  return rows;
 }
 
 /** Incremental log fetch: cached logs up to block N, then N+1..latest in segments, saving after each segment
@@ -66,7 +110,8 @@ function explorerTransfers(kv: KV, addr: string, dir: 'to' | 'from') {
   let all: Promise<any[] | null> | null = null;
   const load = async (): Promise<any[] | null> => {
     const items: any[] = []; let q = '';
-    for (let page = 0; page < 2000; page++) {
+    for (let page = 0; ; page++) {
+      if (page >= 2000) return null;          // too big for the explorer: fall back to exact RPC reads, never silently cut
       const d = await scanV2(`/addresses/${addr}/token-transfers?filter=${dir}&type=ERC-20${q}`);
       if (!Array.isArray(d?.items)) return null;
       items.push(...d.items);
@@ -132,7 +177,9 @@ export async function collect(addrsIn: string[], kv: KV, progress: Progress, opt
   let doneA = 0;
   P('Downloading history', `0 of ${addrs.length} wallets`, 3);
   await pool(addrs, 3, async a => {
-    const [txlist, internal] = await Promise.all([scanAll('txlist', a), scanAll('txlistinternal', a)]);
+    let pages = 0; const tick = (n: number) => { pages++; if (pages % 5 === 0) P('Downloading history', `${doneA} of ${addrs.length} wallets · ~${(pages * 250).toLocaleString()} transactions read (busy wallets take a few minutes)`, 3 + Math.min(10, pages / 60)); };
+    const [txlist, internal] = await Promise.all([scanAll(kv, 'txlist', a, latestBlock, tick), scanAll(kv, 'txlistinternal', a, latestBlock, tick)]);
+    P('Downloading history', `${doneA} of ${addrs.length} wallets · ${(txlist.length + internal.length).toLocaleString()} transactions read · now reading token transfers (busy wallets take a few minutes)…`, 14);
     const logsIn = await incLogs(kv, `logs:in:${a}`, { topics: [TRANSFER_TOPIC, null, addrTopic(a)] }, REG.forkBlock + 1, latestBlock, opts.exactLogs, explorerTransfers(kv, a, 'to'));
     const logsOut = await incLogs(kv, `logs:out:${a}`, { topics: [TRANSFER_TOPIC, addrTopic(a)] }, REG.forkBlock + 1, latestBlock, opts.exactLogs, explorerTransfers(kv, a, 'from'));
     if (logsIn.approx || logsOut.approx) approxAddrs.add(a);
@@ -346,7 +393,9 @@ export async function collect(addrsIn: string[], kv: KV, progress: Progress, opt
       P('Indexing', `Checking ${cand.length} contract calls for missing PLS returns…`, 48);
       const tc = await kv.getMany<any[]>(cand.map(c => 'trace:' + c.h));
       const ent: [string, any][] = [];
+      let nt = 0;
       await pool(cand, 6, async (c, i) => {
+        if (++nt % 200 === 0) P('Indexing', `Checking contract calls for missing PLS returns: ${nt} of ${cand.length}`, 48 + 2 * nt / cand.length);
         let tr = tc[i];
         if (!tr) {
           const r = await rpc('trace_transaction', [c.h]).catch(() => null);
@@ -407,7 +456,16 @@ export async function collect(addrsIn: string[], kv: KV, progress: Progress, opt
     for (const x of d.internal) if (sentByUs.has(lc(x.transactionHash)) || plsUsd(x.value, +x.timeStamp) >= 0.5) priceBlocks.add(+x.blockNumber);
     for (const l of [...d.logsIn, ...d.logsOut]) if (pricedTok.has(lc(l.address)) || sentByUs.has(lc(l.transactionHash))) priceBlocks.add(parseInt(l.blockNumber, 16));
   }
-  const resBlocks = [...new Set([...priceBlocks].filter(b => b > fork).map(b => b - 1))].sort((a, b) => a - b);
+  let resBlocks = [...new Set([...priceBlocks].filter(b => b > fork).map(b => b - 1))].sort((a, b) => a - b);
+  // Very busy wallets (bots) can need 100k+ exact-block reads (~50 min). Above MAX, read one pool snapshot per
+  // `gap` blocks instead, and price each tx from the nearest snapshot (minutes away, still far closer than daily).
+  const MAX_RES = 15000; let resGap = 0;
+  if (resBlocks.length > MAX_RES) {
+    for (resGap = 10; ; resGap = Math.ceil(resGap * 1.5)) {
+      const seenB = new Set<number>(); const keep = resBlocks.filter(b => { const k = Math.floor(b / resGap); if (seenB.has(k)) return false; seenB.add(k); return true; });
+      if (keep.length <= MAX_RES || resGap > 20000) { resBlocks = keep; break; }
+    }
+  }
   timings.resSkipped = new Set([...blocks, ...[...allTx.values()].filter(b => b > fork)]).size - resBlocks.length;
   const reserves: Raw['reserves'] = {};
   const rc = await kv.getMany<any>(resBlocks.map(b => 'res:' + b));
@@ -431,7 +489,7 @@ export async function collect(addrsIn: string[], kv: KV, progress: Progress, opt
   reserves[latestBlock] = decodeRes(await multicall(pairCalls, latestBlock, 200));
   timings.reserves = Date.now() - T0;
 
-  return { addrs, latestBlock, latestTs, per, stakeStarts, stakeEnds, tokenMeta, blockTs, txInfo, isContract, gp, reserves, daily,
+  return { resGap, addrs, latestBlock, latestTs, per, stakeStarts, stakeEnds, tokenMeta, blockTs, txInfo, isContract, gp, reserves, daily,
     hex: { currentDay, dailyDataCount: hiDay, daily: dd, stakes }, balNow, balFork, senders: {}, timings, approxLogs: [...approxAddrs] };
 }
 

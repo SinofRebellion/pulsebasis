@@ -106,6 +106,16 @@ export class Prices {
   private wr(k: string, r: [string, string]): [number, bigint] {
     return R.pairs[k].wpls_is_t0 ? [toFloat(BigInt(r[0]), 18), BigInt(r[1])] : [toFloat(BigInt(r[1]), 18), BigInt(r[0])];
   }
+  private snapKeys: number[] | null = null;
+  /** Busy wallets read pool snapshots only every resGap blocks; use the nearest snapshot within that gap. */
+  snap(state: number): number {
+    const g = this.raw.resGap; if (!g || this.raw.reserves[state]) return state;
+    const K = this.snapKeys ??= Object.keys(this.raw.reserves).map(Number).sort((x, y) => x - y);
+    let lo = 0, hi = K.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (K[m] < state) lo = m + 1; else hi = m; }
+    let best = state; let bd = Infinity;
+    for (const i of [lo - 1, lo]) { const k = K[i]; if (k == null) continue; const d = Math.abs(k - state); if (d < bd) { bd = d; best = k; } }
+    return bd <= g ? best : state;
+  }
   /** state = block whose post-state to read (b-1 for "right before tx in block b") */
   plsAt(state: number): number | null {
     const RS = this.raw.reserves[state]; if (!RS) return null;
@@ -133,7 +143,7 @@ export class Prices {
   /** price at tx in block b (pool state at b-1), with outlier guard vs daily; falls back to daily. */
   at(a: string, ts: number, b: number): [number | null, 'stablecoin' | 'exact-block' | 'daily' | 'none'] {
     if (a === 'USD') return [1, 'stablecoin'];
-    const p = this.exactAt(a, b - 1);
+    const p = this.exactAt(a, this.snap(b - 1));
     if (p != null) { const d = this.daily(a, ts); if (d == null || (p / d > 0.2 && p / d < 5)) return [p, 'exact-block']; }
     const d = this.daily(a, ts); return [d, d != null ? 'daily' : 'none'];
   }

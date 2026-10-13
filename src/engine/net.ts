@@ -135,10 +135,13 @@ export async function rpcBatch(reqs: [string, any[]][], size = 25): Promise<any[
  * Raw endpoint errors are never shown to the user; a final failure throws a plain-language error. */
 export type LogFilter = { address?: string; topics: (string | null | string[])[] };
 const RANGE_RE = /(limited to (a )?\d+ ?block|block range|exceed(s|ed)? (the )?max(imum)? block range|ranges? over \d+ blocks|range (is )?too (large|wide|big)|max(imum)? range)/i;
-const TOOMANY_RE = /(query returned more than|too many (results|logs|records)|response (size|is too)|result (set|window) too large|limit exceeded|log response size|query timeout|timed? ?out|-32005)/i;
+const TOOMANY_RE = /(unexpected end of (json|data)|unexpected eof|json parse error|unterminated string|expected ',' or|json at position|bad getLogs response|terminated|query returned more than|too many (results|logs|records)|response (size|is too)|result (set|window) too large|limit exceeded|log response size|query timeout|timed? ?out|-32005)/i;
 const capOf = (m: string) => { const x = m.match(/(\d[\d,]*)\s*-?\s*block/i) || m.match(/range:?\s*(\d[\d,]*)/i) || m.match(/up to an? (\d+)/i); return x ? parseInt(x[1].replace(/,/g, ''), 10) : 0; };
 export const logTuning = { forceCap: 0, disableExplorer: false };
 const epCap = new Map<string, number>();
+const NEEDS_ADDR_RE = /(specify an address|address is required|must specify (an )?address)/i;
+const needsAddr = new Set<string>();
+const usableFor = (ep: string, f: LogFilter) => !(needsAddr.has(ep) && !f.address);
 const hex = (n: number) => '0x' + n.toString(16);
 const cleanLog = (l: any) => ({ ...l, topics: (l.topics || []).filter((t: any) => t != null) });
 
@@ -178,25 +181,30 @@ async function logsAdaptive(filter: LogFilter, a: number, b: number, onProgress?
   const eps = [...new Set([...REG.rpc.logs, ...REG.rpc.logsChunked, ...REG.rpc.archive])];
   const total = b - a + 1; let done = 0; const out: any[] = [];
   let win = Math.max(...eps.map(e => epCap.get(e) ?? 200000));
+  // Dense wallets (100k+ transfers) make wide ranges fail by size, not by block cap. Remember the smallest range
+  // that failed for size and never grow back past it, so we don't keep paying for the same failure.
+  let ceil = Infinity;
   const jobs: { a: number; b: number; fails: number }[] = [];
   for (let x = a; x <= b; x += win) jobs.push({ a: x, b: Math.min(b, x + win - 1), fails: 0 });
   let k = 0;
   const worker = async () => {
     while (jobs.length) {
       const job = jobs.shift()!; const size = job.b - job.a + 1;
-      const fit = eps.filter(e => (epCap.get(e) ?? Infinity) >= size); const ok = fit.filter(e => !benched(e)); const usable = ok.length ? ok : fit;
+      if (size >= ceil && size > 1) { const w = Math.max(1, Math.floor(ceil / 2)); const parts: typeof jobs = []; for (let x = job.a; x <= job.b; x += w) parts.push({ a: x, b: Math.min(job.b, x + w - 1), fails: 0 }); jobs.unshift(...parts); continue; }
+      const fit = eps.filter(e => usableFor(e, filter) && (epCap.get(e) ?? Infinity) >= size); const ok = fit.filter(e => !benched(e)); const usable = ok.length ? ok : fit;
       if (!usable.length) { const cap = Math.max(...eps.map(e => epCap.get(e) ?? 0)) || 1000; for (let x = job.a; x <= job.b; x += cap) jobs.push({ a: x, b: Math.min(job.b, x + cap - 1), fails: 0 }); continue; }
       const ep = usable[k++ % usable.length];
       try {
         const r = await logsOnce(ep, filter, job.a, job.b, 45000);
         out.push(...r); done += size; onProgress?.(done, total);
-        win = Math.min(win * 2, 1_000_000);
+        win = Math.min(win * 2, 1_000_000, Math.floor(ceil * 0.8));
         // grow: if many jobs are left and they're small, merge the next ones back up to the window size
-        if (jobs.length > 1 && jobs[0].b - jobs[0].a + 1 < win / 2) { const n = jobs[0]; const m = jobs[1]; if (n.b + 1 === m.a && (epCap.get(ep) ?? Infinity) >= m.b - n.a + 1) { jobs.splice(0, 2, { a: n.a, b: m.b, fails: 0 }); } }
+        if (jobs.length > 1 && jobs[0].b - jobs[0].a + 1 < win / 2) { const n = jobs[0]; const m = jobs[1]; if (n.b + 1 === m.a && m.b - n.a + 1 < ceil && (epCap.get(ep) ?? Infinity) >= m.b - n.a + 1) { jobs.splice(0, 2, { a: n.a, b: m.b, fails: 0 }); } }
       } catch (e: any) {
         const m = String(e?.message || e);
+        if (NEEDS_ADDR_RE.test(m)) { needsAddr.add(ep); jobs.unshift(job); continue; }
         if (RANGE_RE.test(m)) { const c = capOf(m); epCap.set(ep, c && c < size ? c : Math.max(1, Math.floor(size / 2))); jobs.unshift(job); continue; }
-        if ((TOOMANY_RE.test(m) || e?.name === 'AbortError') && size > 1) { const mid = job.a + Math.floor(size / 2); jobs.unshift({ a: job.a, b: mid - 1, fails: 0 }, { a: mid, b: job.b, fails: 0 }); win = Math.max(1, Math.floor(size / 2)); continue; }
+        if ((TOOMANY_RE.test(m) || e?.name === 'AbortError' || (size > 5000 && /network ?error|failed to fetch|load failed|ECONNRESET|socket hang up/i.test(m))) && size > 1) { const mid = job.a + Math.floor(size / 2); jobs.unshift({ a: job.a, b: mid - 1, fails: 0 }, { a: mid, b: job.b, fails: 0 }); ceil = Math.min(ceil, size); win = Math.max(1, Math.floor(size / 2)); continue; }
         job.fails++; stats.retries++;
         if (job.fails > 10) throw new BusyError();
         await sleep(isBusy(e) ? backoff(job.fails) : 500 * job.fails + Math.random() * 400); jobs.push(job);
@@ -215,16 +223,16 @@ export async function getLogsAll(filter: LogFilter, fromBlock: number, toBlock: 
   // 1. one wide call per endpoint (exact, fastest). Capped endpoints answer instantly with their limit, which we learn.
   const eps = [...new Set([...REG.rpc.logs, ...REG.rpc.logsChunked, ...REG.rpc.archive])];
   for (const ep of eps) {
-    if ((epCap.get(ep) ?? Infinity) < span) continue;
+    if ((epCap.get(ep) ?? Infinity) < span || !usableFor(ep, filter)) continue;
     const uncapped = REG.rpc.logs.includes(ep);
     for (let t = 0; t < (uncapped ? 2 : 1); t++) {
       try { return (await logsOnce(ep, filter, fromBlock, toBlock, uncapped ? 90000 : 30000)).map(cleanLog); }
-      catch (e: any) { const m = String(e?.message || e); if (RANGE_RE.test(m)) { const c = capOf(m); epCap.set(ep, c && c < span ? c : Math.floor(span / 2)); break; } if (TOOMANY_RE.test(m) || e?.name === 'AbortError') break; await sleep(600); }
+      catch (e: any) { const m = String(e?.message || e); if (NEEDS_ADDR_RE.test(m)) { needsAddr.add(ep); break; } if (RANGE_RE.test(m)) { const c = capOf(m); epCap.set(ep, c && c < span ? c : Math.floor(span / 2)); break; } if (TOOMANY_RE.test(m) || e?.name === 'AbortError') break; await sleep(600); }
     }
   }
   // 2. if every endpoint is capped so tightly that exact splitting would take thousands of calls, use the explorer
   //    (the caller re-checks those results against receipts and balances and re-fetches exactly if anything is off)
-  const bestCap = Math.max(...eps.map(e => epCap.get(e) ?? Infinity));
+  const bestCap = Math.max(...eps.filter(e => usableFor(e, filter)).map(e => epCap.get(e) ?? Infinity));
   if (!exactOnly && span / bestCap > 1500) {
     const ex = await (explorer ? explorer(fromBlock, toBlock) : logsExplorer(filter, fromBlock, toBlock, blk => onChunk?.(blk - fromBlock, span))).catch(() => null);
     if (ex) { logState.approx = true; return Object.assign(ex, { approx: true }); }
